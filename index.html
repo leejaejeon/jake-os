@@ -70,7 +70,7 @@
       );
     }
 
-    // [2. 각인 관리 - 폴더 및 정렬 강화]
+    // [2. 각인 관리 - 완벽 복구 버전]
     function EngravingView() {
       const [groupedData, setGroupedData] = useState({});
       const [loading, setLoading] = useState(true);
@@ -81,16 +81,26 @@
         async function fetchData() {
           const { data } = await supabase.from('engravings').select('*');
           if (data) {
-            // 필터링: 유효한 데이터만 (빈 칸 배제)
-            const valid = data.filter(i => i.deceased_name && i.deceased_name !== '.' && i.deceased_name.trim() !== '');
-            // 정렬: 미완료 우선 -> 날짜 미래순 (내림차순)
+            // 🚨 S등급 필터링: 실제 내용이 없는 유령 행 제거
+            const valid = data.filter(i => 
+              i.deceased_name && 
+              i.deceased_name.trim() !== '' && 
+              i.deceased_name !== '.' &&
+              i.location &&
+              i.location.trim() !== ''
+            );
+
+            // 🚨 시급성 기반 정렬: 미완료 우선 -> 날짜 미래순
             valid.sort((a, b) => {
-              if (a.status !== b.status) return a.status === '완료' ? 1 : -1;
-              return new Date(b.scheduled_date) - new Date(a.scheduled_date);
+              const isDoneA = a.status === '완료' || a.status === '설치완료';
+              const isDoneB = b.status === '완료' || b.status === '설치완료';
+              if (isDoneA !== isDoneB) return isDoneA ? 1 : -1;
+              return new Date(b.scheduled_date || 0) - new Date(a.scheduled_date || 0);
             });
-            // 그룹화
+
+            // 🚨 폴더 그룹화
             const groups = valid.reduce((acc, i) => {
-              const key = i.contract_no && i.contract_no !== '.' ? i.contract_no : `P-${i.deceased_name}`;
+              const key = i.contract_no && i.contract_no !== '.' ? i.contract_no : `Individual-${i.id}`;
               if (!acc[key]) acc[key] = []; acc[key].push(i); return acc;
             }, {});
             setGroupedData(groups);
@@ -107,7 +117,7 @@
           {Object.entries(groupedData).map(([cNo, items]) => (
             <div key={cNo} className="glass-panel rounded-2xl overflow-hidden shadow-xl border border-[#333]">
               <div className="bg-[#1a1a1a] p-4 flex justify-between items-center border-b border-[#333]">
-                <div className="flex items-center gap-3"><i className="ph ph-folder-open text-blue-500 text-xl"></i><span className="font-black text-white text-sm tracking-tighter">계약그룹: {cNo.startsWith('P-') ? '개별접수' : cNo}</span></div>
+                <div className="flex items-center gap-3"><i className="ph ph-folder-open text-blue-500 text-xl"></i><span className="font-black text-white text-sm tracking-tighter">계약그룹: {cNo.startsWith('Individual-') ? '개별접수' : cNo}</span></div>
                 <span className="text-[10px] bg-blue-900/40 text-blue-300 px-2 py-1 rounded font-bold uppercase">Items {items.length}</span>
               </div>
               <div className="divide-y divide-[#2a2a2a]">
@@ -136,7 +146,7 @@
                     <select value={selectedItem.status} onChange={async (e) => {
                       const newStatus = e.target.value;
                       await supabase.from('engravings').update({ status: newStatus }).eq('id', selectedItem.id);
-                      window.location.reload(); // 간결한 업데이트를 위해 리로드
+                      window.location.reload(); 
                     }} className="jake-input cursor-pointer"><option value="접수">접수</option><option value="작업중">작업중</option><option value="시안대기">시안대기</option><option value="완료">완료</option><option value="설치완료">설치완료</option></select>
                   </div>
                 </div>
