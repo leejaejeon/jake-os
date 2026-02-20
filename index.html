@@ -33,14 +33,12 @@
     .slot:active { transform: scale(0.95); }
     .slot-spacer { visibility: hidden; pointer-events: none; border: none; }
     
-    /* 🎨 시각 보호 팔레트 (대비 감소, 소프트 톤 적용) */
+    /* 🎨 시각 보호 팔레트 */
     .status-미분양 { background-color: #e5e7eb; color: #374151; border-color: #d1d5db; }
     .status-예약 { background-color: #0c4a6e; color: #7dd3fc; border-color: #0369a1; }
     .status-계약금 { background-color: #713f12; color: #fde047; border-color: #a16207; }
     .status-홀딩 { background-color: #4a044e; color: #f9a8d4; border-color: #a21caf; font-weight: bold; }
     .status-안치 { background-color: #1e293b; color: #94a3b8; border-color: #475569; font-weight: bold; }
-    
-    /* 텍스트 쨍함(Halation) 방지: 순백색(#fff) 대신 차분한 연회색(#cbd5e1) 사용 */
     .status-안치 .deceased-name { color: #cbd5e1; font-size: 0.75rem; font-weight: 600; } 
   </style>
 </head>
@@ -128,20 +126,46 @@
       useEffect(() => {
         async function fetchLocations() {
           try {
-            // 🚨 핵심 수정: 1,000개 제한을 풀고 10,000개까지 한 번에 로드
-            const { data } = await supabase.from('master_locations').select('*').limit(10000);
-            if (data) {
-              setLocations(data);
-              const uniqueSections = [...new Set(data.map(item => item.section).filter(Boolean))].sort();
-              setSections(uniqueSections);
-              if (uniqueSections.length > 0) setActiveSection('A6/가'); // 테스트를 위해 문제가 있던 A6/가부터 표시
+            let allData = [];
+            let from = 0;
+            const step = 1000;
+            
+            // 🚨 핵심 수정: 데이터가 바닥날 때까지 1000개씩 무한 루프로 퍼올림
+            while (true) {
+              const { data, error } = await supabase
+                .from('master_locations')
+                .select('*')
+                .range(from, from + step - 1);
+                
+              if (error) throw error;
+              if (data && data.length > 0) {
+                allData = [...allData, ...data];
+              }
+              if (!data || data.length < step) {
+                break; // 더 이상 가져올 데이터가 없으면 루프 탈출
+              }
+              from += step;
             }
-          } finally { setLoading(false); }
+
+            if (allData.length > 0) {
+              setLocations(allData);
+              // 중복 제거 후 숫자 우선(Numeric) 정렬 알고리즘 적용 (B1 -> B2 -> B10 순서 보장)
+              const uniqueSections = [...new Set(allData.map(item => item.section).filter(Boolean))]
+                .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+              
+              setSections(uniqueSections);
+              if (uniqueSections.length > 0) setActiveSection(uniqueSections[0]); // 첫 번째 탭으로 초기화
+            }
+          } catch (err) {
+            console.error(err);
+          } finally { 
+            setLoading(false); 
+          }
         }
         fetchLocations();
       }, []);
 
-      if (loading) return <div className="p-8 text-center text-gray-500 animate-pulse">전체 수목 현장 동기화 중 (Limit 10,000)...</div>;
+      if (loading) return <div className="p-8 text-center text-gray-500 animate-pulse">모든 수목 현장 데이터 로딩 중 (Pagination)...</div>;
 
       const currentData = locations.filter(loc => loc.section === activeSection);
       const layout = rowConfig[activeSection] || [20, 20]; 
@@ -171,7 +195,8 @@
                   <div className="deceased-name truncate w-full px-1">{item.deceased_name || ''}</div>
                 </div>
               );
-            })}
+            });
+            }
           </div>
         );
         currentIndex += count;
