@@ -6,43 +6,19 @@
   <title>Jake Integrated OS</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
-  
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
 
   <style>
-    /* Z폴드6 최적화 및 다크 테마 기본 세팅 */
-    body {
-      background-color: #121212;
-      color: #e0e0e0;
-      overscroll-behavior-y: none;
-      -webkit-font-smoothing: antialiased;
-      font-family: 'Pretendard', sans-serif;
-    }
-    
-    ::-webkit-scrollbar { width: 6px; }
+    body { background-color: #121212; color: #e0e0e0; font-family: 'Pretendard', sans-serif; overflow: hidden; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: #1e1e1e; }
-    ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
-
-    .card {
-      background-color: #1e1e1e;
-      border: 1px solid #333;
-      border-radius: 0.75rem;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-    }
-    
-    .status-badge {
-      padding: 0.15rem 0.5rem;
-      border-radius: 9999px;
-      font-size: 0.75rem;
-      font-weight: 700;
-    }
-    .status-progress { background: #0d6efd; color: white; }
-    .status-ready { background: #6c757d; color: white; }
-    .status-done { background: #198754; color: white; }
+    ::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+    .kanban-col { min-width: 280px; max-width: 320px; }
+    .glass-panel { background: rgba(30, 30, 30, 0.8); backdrop-filter: blur(10px); border: 1px solid #333; }
   </style>
 </head>
 <body>
@@ -51,145 +27,157 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    // 🔐 Supabase 실시간 연결 (Jake 제공 키)
+    // Supabase 설정
     const SUPABASE_URL = 'https://lqccxnciiajwqdmpwjdv.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxY2N4bmNpaWFqd3FkbXB3amR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MjA3MTMsImV4cCI6MjA4NzA5NjcxM30.L23-eq-DIPsbONOeX-xQ8UcMb7gtgTTTRpkaSm9HTw4';
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    function App() {
+    // ==========================================
+    // 1. 칸반 보드 컴포넌트 (WorkOS)
+    // ==========================================
+    function KanbanBoard() {
       const [projects, setProjects] = useState([]);
-      const [locations, setLocations] = useState([]);
       const [loading, setLoading] = useState(true);
-      const [error, setError] = useState(null);
 
-      // ⚙️ Zero-Failure 데이터 패칭 로직
       useEffect(() => {
-        async function fetchDashboardData() {
+        async function fetchProjects() {
           try {
-            // 1. WorkOS: 진행 중인 프로젝트 5개 불러오기
-            const { data: projData, error: projError } = await supabase
+            const { data, error } = await supabase
               .from('projects')
               .select('*')
-              .neq('status', '완료')
-              .order('start_date', { ascending: false })
-              .limit(5);
+              .order('start_date', { ascending: false });
             
-            if (projError) throw projError;
-
-            // 2. 공유앱: 현장 위치 마스터 데이터 일부 불러오기
-            const { data: locData, error: locError } = await supabase
-              .from('master_locations')
-              .select('*')
-              .limit(5);
-
-            if (locError) throw locError;
-
-            setProjects(projData || []);
-            setLocations(locData || []);
+            if (error) throw error;
+            setProjects(data || []);
           } catch (err) {
-            console.error('DB Fetch Error:', err);
-            setError(err.message);
+            console.error(err);
+            alert("프로젝트 데이터를 불러오지 못했습니다.");
           } finally {
             setLoading(false);
           }
         }
-        
-        fetchDashboardData();
+        fetchProjects();
       }, []);
 
-      if (loading) {
-        return (
-          <div className="flex h-screen w-screen items-center justify-center bg-[#121212]">
-            <div className="text-[#0d6efd] text-xl font-bold animate-pulse">DB 시스템에 연결 중...</div>
-          </div>
-        );
-      }
+      const columns = [
+        { id: '준비', title: '📝 준비', border: 'border-gray-500' },
+        { id: '진행중', title: '🚀 진행중', border: 'border-blue-500' },
+        { id: '보류', title: '⏸️ 보류', border: 'border-yellow-500' },
+        { id: '완료', title: '✅ 완료', border: 'border-green-500' }
+      ];
 
-      if (error) {
-        return (
-          <div className="flex h-screen w-screen items-center justify-center bg-[#121212] p-4">
-            <div className="card border-red-500 p-6 text-center">
-              <h2 className="text-red-500 text-lg font-bold mb-2">통신 오류 발생</h2>
-              <p className="text-sm text-gray-400">{error}</p>
-            </div>
-          </div>
-        );
-      }
+      if (loading) return <div className="p-8 text-center text-gray-400 animate-pulse">칸반 데이터 동기화 중...</div>;
 
       return (
-        <div className="min-h-screen p-4 md:p-8 max-w-7xl mx-auto">
-          <header className="mb-8 flex justify-between items-center border-b border-[#333] pb-4">
-            <div>
-              <h1 className="text-2xl font-extrabold text-white tracking-tight">Jake Integrated OS</h1>
-              <p className="text-sm text-gray-500 mt-1">Supabase DB 실시간 동기화 완료</p>
-            </div>
-            <div className="h-10 w-10 rounded-full bg-[#0d6efd] flex items-center justify-center font-bold text-white shadow-[0_0_15px_rgba(13,110,253,0.5)]">
-              J
-            </div>
-          </header>
+        <div className="flex gap-4 overflow-x-auto h-full pb-4 items-start">
+          {columns.map(col => {
+            const colProjects = projects.filter(p => p.status === col.id);
+            return (
+              <div key={col.id} className="kanban-col flex flex-col h-full glass-panel rounded-xl p-3 shrink-0">
+                <div className={`text-sm font-bold mb-3 flex justify-between items-center border-b-2 pb-2 ${col.border}`}>
+                  <span>{col.title}</span>
+                  <span className="bg-gray-800 text-gray-300 px-2 py-0.5 rounded-full text-xs">{colProjects.length}</span>
+                </div>
+                <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                  {colProjects.map(p => (
+                    <div key={p.id} className="bg-[#252525] p-3 rounded-lg border border-[#444] shadow-sm hover:border-gray-300 cursor-pointer transition-colors border-l-4 border-l-gray-500">
+                      <div className="text-[10px] text-gray-400 mb-1 flex justify-between">
+                        <span>{p.id}</span>
+                        <span className={p.priority === '상' ? 'text-red-400 font-bold' : ''}>{p.priority}</span>
+                      </div>
+                      <div className="font-bold text-sm text-white mb-2 leading-tight">{p.title}</div>
+                      <div className="flex justify-between items-end text-xs text-gray-500">
+                        <span>{p.personnel || '담당미정'}</span>
+                        <span className="bg-[#111] px-1.5 py-0.5 rounded border border-[#333]">{p.end_date ? p.end_date.substring(5) : '-'}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    // ==========================================
+    // 2. 메인 App Shell (레이아웃 & 라우터)
+    // ==========================================
+    function App() {
+      const [currentTab, setCurrentTab] = useState('project');
+      const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+      const navItems = [
+        { id: 'project', icon: 'ph-kanban', label: '프로젝트 (Work)' },
+        { id: 'field', icon: 'ph-map-trifold', label: '현장 마스터 (공유)' },
+        { id: 'calendar', icon: 'ph-calendar-check', label: '통합 일정' },
+        { id: 'engraving', icon: 'ph-hammer', label: '각인 관리' },
+      ];
+
+      return (
+        <div className="flex h-screen bg-[#121212] overflow-hidden">
+          
+          {/* 모바일 사이드바 오버레이 */}
+          {isSidebarOpen && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden" onClick={() => setIsSidebarOpen(false)}></div>
+          )}
+
+          {/* 사이드바 */}
+          <aside className={`fixed md:static inset-y-0 left-0 z-50 w-64 glass-panel border-r border-[#333] transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-200 ease-in-out flex flex-col`}>
+            <div className="p-5 flex justify-between items-center border-b border-[#333]">
+              <h1 className="text-xl font-extrabold text-white tracking-tight">Jake<span className="text-blue-500">OS</span></h1>
+              <button className="md:hidden text-gray-400 hover:text-white" onClick={() => setIsSidebarOpen(false)}>
+                <i className="ph ph-x text-2xl"></i>
+              </button>
+            </div>
             
-            {/* WorkOS 패널 */}
-            <section className="card flex flex-col h-[400px]">
-              <div className="flex justify-between items-center mb-4 border-b border-[#333] pb-2">
-                <h2 className="text-lg font-bold text-white">🚀 진행 중인 프로젝트 (WorkOS)</h2>
-                <span className="text-xs text-gray-400">{projects.length}건</span>
+            <nav className="flex-1 p-4 space-y-2">
+              <div className="text-xs font-bold text-gray-500 mb-2 px-2">MODULES</div>
+              {navItems.map(item => (
+                <button
+                  key={item.id}
+                  onClick={() => { setCurrentTab(item.id); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${currentTab === item.id ? 'bg-blue-600 bg-opacity-20 text-blue-400 border border-blue-500/30' : 'text-gray-400 hover:bg-[#2a2a2a] hover:text-white'}`}
+                >
+                  <i className={`ph ${item.icon} text-lg`}></i>
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+            
+            <div className="p-4 border-t border-[#333]">
+              <div className="flex items-center gap-3 px-2">
+                <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-white text-xs">J</div>
+                <div className="text-xs text-gray-400">Admin Mode</div>
               </div>
-              <div className="flex-1 overflow-y-auto pr-2">
-                {projects.length === 0 ? (
-                  <div className="text-center text-gray-500 mt-10 text-sm">진행 중인 프로젝트가 없습니다.</div>
-                ) : (
-                  <div className="space-y-3">
-                    {projects.map(p => (
-                      <div key={p.id} className="p-3 bg-[#2a2a2a] rounded-lg border border-[#444] hover:border-[#0d6efd] transition-colors cursor-pointer">
-                        <div className="flex justify-between items-start mb-1">
-                          <span className="font-bold text-white text-sm">{p.title}</span>
-                          <span className={`status-badge ${p.status === '진행중' ? 'status-progress' : 'status-ready'}`}>
-                            {p.status}
-                          </span>
-                        </div>
-                        <div className="text-xs text-gray-400 flex justify-between">
-                          <span>{p.category || '미분류'}</span>
-                          <span>{p.end_date || '마감일 없음'}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </section>
+            </div>
+          </aside>
 
-            {/* 공유앱 패널 */}
-            <section className="card flex flex-col h-[400px]">
-              <div className="flex justify-between items-center mb-4 border-b border-[#333] pb-2">
-                <h2 className="text-lg font-bold text-white">🌳 수목 현장 마스터 (공유앱)</h2>
-                <span className="text-xs text-gray-400">데이터 샘플링</span>
-              </div>
-              <div className="flex-1 overflow-y-auto pr-2">
-                {locations.length === 0 ? (
-                  <div className="text-center text-gray-500 mt-10 text-sm">마스터 데이터가 없습니다.</div>
-                ) : (
-                  <div className="space-y-2">
-                    {locations.map(loc => (
-                      <div key={loc.id} className="flex justify-between items-center p-3 bg-[#2a2a2a] rounded-lg border border-[#444]">
-                        <div className="flex items-center gap-3">
-                          <span className="text-[#0d6efd] font-mono font-bold text-sm bg-[#121212] px-2 py-1 rounded border border-[#333]">
-                            {loc.section} {loc.slot_no}
-                          </span>
-                          <span className="text-sm font-bold text-white">{loc.deceased_name || '(공란)'}</span>
-                        </div>
-                        <span className={`text-xs px-2 py-1 rounded font-bold ${loc.status === '안치' ? 'bg-[#198754] text-white' : 'bg-[#333] text-gray-300'}`}>
-                          {loc.status}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </section>
+          {/* 메인 컨텐츠 영역 */}
+          <main className="flex-1 flex flex-col min-w-0">
+            {/* 모바일 헤더 */}
+            <header className="md:hidden flex items-center justify-between p-4 glass-panel border-b border-[#333] z-30">
+              <button className="text-gray-300" onClick={() => setIsSidebarOpen(true)}>
+                <i className="ph ph-list text-2xl"></i>
+              </button>
+              <span className="font-bold text-white text-sm">{navItems.find(i => i.id === currentTab)?.label}</span>
+              <div className="w-6"></div> {/* 정렬용 빈 공간 */}
+            </header>
 
-          </div>
+            {/* 탭 전환 영역 */}
+            <div className="flex-1 p-4 md:p-6 overflow-hidden">
+              {currentTab === 'project' && <KanbanBoard />}
+              
+              {currentTab !== 'project' && (
+                <div className="h-full flex flex-col items-center justify-center text-gray-500 border-2 border-dashed border-[#333] rounded-xl">
+                  <i className={`ph ${navItems.find(i => i.id === currentTab)?.icon} text-4xl mb-2`}></i>
+                  <p>이 모듈은 아직 조립되지 않았습니다.</p>
+                  <p className="text-xs mt-1">다음 단계에서 코드를 추가합니다.</p>
+                </div>
+              )}
+            </div>
+          </main>
+          
         </div>
       );
     }
