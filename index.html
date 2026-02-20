@@ -4,36 +4,41 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Jake Integrated OS</title>
+  
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
   <style>
     body { background-color: #121212; color: #e0e0e0; font-family: 'Pretendard', sans-serif; overflow: hidden; }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: #1e1e1e; }
     ::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+    
     .kanban-col { min-width: 280px; max-width: 320px; }
     .glass-panel { background: rgba(30, 30, 30, 0.8); backdrop-filter: blur(10px); border: 1px solid #333; }
     
-    /* 현장 마스터 슬롯 스타일 */
+    /* 🌳 현장 마스터 슬롯 스타일 (기존 앱 비율 100% 복원) */
+    .row-container { display: flex; flex-direction: row; justify-content: flex-start; gap: 4px; margin-bottom: 8px; width: max-content; }
     .slot { 
-      min-width: 80px; height: 75px; 
+      width: 80px; min-width: 80px; height: 65px; 
       display: flex; flex-direction: column; justify-content: center; align-items: center; 
-      border-radius: 8px; font-size: 0.75rem; text-align: center; border: 1px solid #444; 
-      cursor: pointer; transition: all 0.2s; 
+      border-radius: 6px; font-size: 0.7rem; text-align: center; border: 1px solid #444; 
+      cursor: pointer; transition: opacity 0.2s; 
     }
-    .slot:hover { filter: brightness(1.2); transform: scale(0.98); }
+    .slot:active { opacity: 0.6; transform: scale(0.95); }
     .slot-spacer { visibility: hidden; pointer-events: none; border: none; }
     
-    /* 상태별 색상 (다크테마 최적화) */
-    .status-미분양 { background-color: #2a2a2a; color: #aaa; }
-    .status-예약 { background-color: #423512; border-color: #f59e0b; color: #fcd34d; }
-    .status-계약금 { background-color: #4f3014; border-color: #d97706; color: #fbbf24; }
-    .status-홀딩 { background-color: #4a1515; border-color: #ef4444; color: #fca5a5; }
-    .status-안치 { background-color: #113320; border-color: #22c55e; color: #86efac; font-weight: bold; }
+    /* 🎨 차분한 다크 매트(Dark Matte) 컬러 팔레트 (눈부심 제로) */
+    .status-미분양 { background-color: #262626; color: #999; border-color: #333; }
+    .status-예약 { background-color: #42381c; color: #d4b86a; border-color: #635327; }
+    .status-계약금 { background-color: #523418; color: #cc9058; border-color: #754b23; }
+    .status-홀딩 { background-color: #4a1f1f; color: #d17575; border-color: #6e2c2c; }
+    .status-안치 { background-color: #1a4227; color: #7abf92; border-color: #27613b; font-weight: bold; }
+    .status-안치 .deceased-name { color: #ffffff; } /* 안치된 분의 성함은 흰색으로 돋보이게 */
   </style>
 </head>
 <body>
@@ -66,8 +71,8 @@
       const columns = [
         { id: '준비', title: '📝 준비', border: 'border-gray-500' },
         { id: '진행중', title: '🚀 진행중', border: 'border-blue-500' },
-        { id: '보류', title: '⏸️ 보류', border: 'border-yellow-500' },
-        { id: '완료', title: '✅ 완료', border: 'border-green-500' }
+        { id: '보류', title: '⏸️ 보류', border: 'border-yellow-600' },
+        { id: '완료', title: '✅ 완료', border: 'border-green-600' }
       ];
 
       if (loading) return <div className="p-8 text-center text-gray-400 animate-pulse">칸반 데이터 동기화 중...</div>;
@@ -80,16 +85,16 @@
               <div key={col.id} className="kanban-col flex flex-col h-full glass-panel rounded-xl p-3 shrink-0">
                 <div className={`text-sm font-bold mb-3 flex justify-between items-center border-b-2 pb-2 ${col.border}`}>
                   <span>{col.title}</span>
-                  <span className="bg-gray-800 text-gray-300 px-2 py-0.5 rounded-full text-xs">{colProjects.length}</span>
+                  <span className="bg-[#111] text-gray-400 px-2 py-0.5 rounded-full text-xs border border-[#333]">{colProjects.length}</span>
                 </div>
                 <div className="flex-1 overflow-y-auto space-y-3 pr-1">
                   {colProjects.map(p => (
-                    <div key={p.id} className="bg-[#252525] p-3 rounded-lg border border-[#444] shadow-sm hover:border-gray-300 cursor-pointer transition-colors border-l-4 border-l-gray-500">
-                      <div className="text-[10px] text-gray-400 mb-1 flex justify-between">
+                    <div key={p.id} className="bg-[#222] p-3 rounded-lg border border-[#333] shadow-sm hover:border-gray-400 cursor-pointer transition-colors border-l-4 border-l-gray-500">
+                      <div className="text-[10px] text-gray-500 mb-1 flex justify-between">
                         <span>{p.id}</span>
                         <span className={p.priority === '상' ? 'text-red-400 font-bold' : ''}>{p.priority}</span>
                       </div>
-                      <div className="font-bold text-sm text-white mb-2 leading-tight">{p.title}</div>
+                      <div className="font-bold text-sm text-gray-200 mb-2 leading-tight">{p.title}</div>
                       <div className="flex justify-between items-end text-xs text-gray-500">
                         <span>{p.personnel || '담당미정'}</span>
                         <span className="bg-[#111] px-1.5 py-0.5 rounded border border-[#333]">{p.end_date ? p.end_date.substring(5) : '-'}</span>
@@ -105,7 +110,7 @@
     }
 
     // ==========================================
-    // 2. 현장 마스터 (공유앱 지도) 컴포넌트
+    // 2. 현장 마스터 컴포넌트 (Jake의 기존 배열 공식 적용)
     // ==========================================
     function FieldMaster() {
       const [locations, setLocations] = useState([]);
@@ -113,16 +118,27 @@
       const [activeSection, setActiveSection] = useState('');
       const [loading, setLoading] = useState(true);
 
+      // 🧠 Jake의 기존 공유앱 배열 공식 그대로 이식
+      const rowConfig = { 
+        'A2/가':[12], 'A3/가':[8,8], 'A4/가':[12,12,12,12,18,18,28,12], 
+        'A4/나':[9,11,7,8,8], 'A4/다':[6,6], 'A5/가':[13,14,14,13,13,15,11], 
+        'A5/나':[23,22,26,25,30,47,47,30,39], 'A6/가':[27,27,22,18,19,15,13], 
+        'A6/나':[25,26,26,26,26,26], 'C1/가':[13,17,21,25], 'B1/가':[20,23], 
+        'B2/가':[34,34,35,34,34], 'B3/가':[48,46,45,41], 'B4/가':[37,38,41,41,34], 
+        'B5/가':[47,47,49,48,40,32], 'B6/가/1-12':[47,52,53,52,53,53,54,54,54,53,55,54,50], 
+        'B6/가/13-14':[75,75,75,75,75,75,75,75,75] 
+      };
+
       useEffect(() => {
         async function fetchLocations() {
           try {
+            // DB에서 전체 데이터를 불러오되, 가입력된 순서를 최대한 보존
             const { data } = await supabase.from('master_locations').select('*');
             if (data) {
               setLocations(data);
-              // 고유 구역(Section) 추출 (예: A2/가, B6/가/1-12 등)
               const uniqueSections = [...new Set(data.map(item => item.section).filter(Boolean))].sort();
               setSections(uniqueSections);
-              if (uniqueSections.length > 0) setActiveSection(uniqueSections[0]);
+              if (uniqueSections.length > 0) setActiveSection('A2/가'); // 기본값
             }
           } finally { setLoading(false); }
         }
@@ -131,44 +147,60 @@
 
       if (loading) return <div className="p-8 text-center text-gray-400 animate-pulse">현장 데이터 동기화 중...</div>;
 
-      // 현재 선택된 구역의 데이터 렌더링
+      // 렌더링 로직: 현재 섹션 데이터 필터링 및 배열 공식에 맞게 쪼개기(Chunk)
       const currentData = locations.filter(loc => loc.section === activeSection);
+      const layout = rowConfig[activeSection] || [20, 20]; // 공식이 없으면 기본 20개씩 줄바꿈
+      
+      let currentIndex = 0;
+      const rows = [];
+
+      layout.forEach((count, rIdx) => {
+        if (currentIndex >= currentData.length) return;
+        
+        const rowData = currentData.slice(currentIndex, currentIndex + count);
+        
+        rows.push(
+          <div key={`row-${rIdx}`} className="row-container">
+            {rowData.map((item, idx) => {
+              if (item.id.includes('SPACER')) {
+                return <div key={`spacer-${idx}`} className="slot slot-spacer"></div>;
+              }
+              
+              return (
+                <div 
+                  key={item.id} 
+                  className={`slot status-${item.status || '미분양'}`}
+                  onClick={() => alert(`[${item.section} ${item.slot_no}]\n계약자: ${item.contractor || '없음'}\n고인명: ${item.deceased_name || '없음'}\n상태: ${item.status}`)}
+                >
+                  <div className="font-mono text-[10px] opacity-60 mb-0.5">{item.slot_no}</div>
+                  <div className="deceased-name font-bold truncate w-full px-1">{item.deceased_name || ''}</div>
+                </div>
+              );
+            })}
+          </div>
+        );
+        currentIndex += count;
+      });
 
       return (
-        <div className="flex flex-col h-full glass-panel rounded-xl overflow-hidden">
-          {/* 구역 네비게이션 (가로 스크롤) */}
-          <div className="flex overflow-x-auto bg-[#1a1a1a] p-2 gap-2 border-b border-[#333] shrink-0">
+        <div className="flex flex-col h-full glass-panel rounded-xl overflow-hidden border border-[#333]">
+          {/* 구역 네비게이션 탭 */}
+          <div className="flex overflow-x-auto bg-[#161616] p-2 gap-2 border-b border-[#333] shrink-0">
             {sections.map(sec => (
               <button 
                 key={sec} 
                 onClick={() => setActiveSection(sec)}
-                className={`px-4 py-1.5 rounded-full text-sm font-bold whitespace-nowrap transition-colors ${activeSection === sec ? 'bg-blue-600 text-white' : 'bg-[#2a2a2a] text-gray-400 hover:bg-[#333]'}`}
+                className={`px-4 py-1.5 rounded-md text-sm font-bold whitespace-nowrap transition-colors ${activeSection === sec ? 'bg-[#333] text-gray-100 border border-[#555]' : 'bg-transparent text-gray-500 hover:text-gray-300 border border-transparent'}`}
               >
                 {sec}
               </button>
             ))}
           </div>
 
-          {/* 지도 그리드 렌더링 */}
-          <div className="flex-1 overflow-auto p-4">
-            <div className="flex flex-wrap gap-2">
-              {currentData.map((item, idx) => {
-                // SPACER 처리 로직
-                if (item.id.includes('SPACER')) {
-                  return <div key={`spacer-${idx}`} className="slot slot-spacer"></div>;
-                }
-                
-                return (
-                  <div 
-                    key={item.id} 
-                    className={`slot status-${item.status || '미분양'}`}
-                    onClick={() => alert(`${item.section} ${item.slot_no}\n상태: ${item.status}\n고인명: ${item.deceased_name || '없음'}`)}
-                  >
-                    <div className="font-mono text-[10px] opacity-70 mb-1">{item.slot_no}</div>
-                    <div className="font-bold truncate w-full px-1">{item.deceased_name || ''}</div>
-                  </div>
-                );
-              })}
+          {/* 현장 지도 렌더링 영역 */}
+          <div className="flex-1 overflow-auto p-4 bg-[#111]">
+            <div className="w-max pb-10">
+              {rows.length > 0 ? rows : <div className="text-gray-500">이 구역의 데이터가 없습니다.</div>}
             </div>
           </div>
         </div>
@@ -179,7 +211,7 @@
     // 3. 메인 App Shell
     // ==========================================
     function App() {
-      const [currentTab, setCurrentTab] = useState('project');
+      const [currentTab, setCurrentTab] = useState('field'); // 테스트를 위해 'field'를 기본 화면으로
       const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
       const navItems = [
@@ -206,7 +238,7 @@
                 <button
                   key={item.id}
                   onClick={() => { setCurrentTab(item.id); setIsSidebarOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${currentTab === item.id ? 'bg-blue-600 bg-opacity-20 text-blue-400 border border-blue-500/30' : 'text-gray-400 hover:bg-[#2a2a2a] hover:text-white'}`}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${currentTab === item.id ? 'bg-[#222] text-gray-200 border border-[#444]' : 'text-gray-500 hover:bg-[#1a1a1a] hover:text-gray-300 border border-transparent'}`}
                 >
                   <i className={`ph ${item.icon} text-lg`}></i> {item.label}
                 </button>
@@ -216,8 +248,8 @@
 
           <main className="flex-1 flex flex-col min-w-0">
             <header className="md:hidden flex items-center justify-between p-4 glass-panel border-b border-[#333] z-30">
-              <button className="text-gray-300" onClick={() => setIsSidebarOpen(true)}><i className="ph ph-list text-2xl"></i></button>
-              <span className="font-bold text-white text-sm">{navItems.find(i => i.id === currentTab)?.label}</span>
+              <button className="text-gray-400" onClick={() => setIsSidebarOpen(true)}><i className="ph ph-list text-2xl"></i></button>
+              <span className="font-bold text-gray-200 text-sm">{navItems.find(i => i.id === currentTab)?.label}</span>
               <div className="w-6"></div>
             </header>
 
@@ -226,9 +258,9 @@
               {currentTab === 'field' && <FieldMaster />}
               
               {(currentTab !== 'project' && currentTab !== 'field') && (
-                <div className="h-full flex flex-col items-center justify-center text-gray-500 border-2 border-dashed border-[#333] rounded-xl">
+                <div className="h-full flex flex-col items-center justify-center text-gray-600 border-2 border-dashed border-[#333] rounded-xl">
                   <i className={`ph ${navItems.find(i => i.id === currentTab)?.icon} text-4xl mb-2`}></i>
-                  <p>모듈 조립 대기 중</p>
+                  <p className="text-sm">해당 모듈은 조립 대기 중입니다.</p>
                 </div>
               )}
             </div>
