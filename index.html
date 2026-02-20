@@ -74,12 +74,15 @@
       );
     }
 
-    // [2. 각인 관리 - PC 고밀도 압축 리스트]
+    // [2. 각인 관리 - 접기/펴기 기능 탑재]
     function EngravingView() {
       const [groupedData, setGroupedData] = useState({});
       const [loading, setLoading] = useState(true);
       const [isModalOpen, setIsModalOpen] = useState(false);
       const [selectedItem, setSelectedItem] = useState(null);
+      
+      // 폴더 접기 상태 관리 (key: 계약번호, value: boolean)
+      const [collapsedGroups, setCollapsedGroups] = useState({});
 
       useEffect(() => {
         async function fetchEngravings() {
@@ -110,6 +113,10 @@
         fetchEngravings();
       }, []);
 
+      const toggleGroup = (cNo) => {
+        setCollapsedGroups(prev => ({ ...prev, [cNo]: !prev[cNo] }));
+      };
+
       if (loading) return <div className="p-10 text-center animate-pulse font-black text-blue-500 text-xl tracking-widest">LOADING DATABASE...</div>;
 
       if (Object.keys(groupedData).length === 0) return (
@@ -120,51 +127,63 @@
       );
 
       return (
-        <div className="h-full overflow-y-auto pb-40 pr-2 space-y-6">
-          {Object.entries(groupedData).map(([cNo, items]) => (
-            <div key={cNo} className="bg-[#111] rounded-xl overflow-hidden border border-[#333] shadow-lg">
-              
-              {/* 폴더 헤더 (슬림하게) */}
-              <div className="bg-[#1a1a1a] px-5 py-3 flex justify-between items-center border-b border-[#333]">
-                <div className="flex items-center gap-2">
-                  <i className="ph ph-folder-open text-blue-500 text-xl"></i>
-                  <h3 className="text-sm font-black text-white uppercase tracking-wider">{cNo.startsWith('개별접수') ? '개별 건 (계약번호 없음)' : `계약번호: ${cNo}`}</h3>
-                </div>
-                <span className="text-[10px] text-gray-500 font-bold bg-[#000] px-2 py-0.5 rounded-md border border-[#333]">{items.length}건</span>
-              </div>
+        <div className="h-full overflow-y-auto pb-40 pr-2 space-y-4">
+          {Object.entries(groupedData).map(([cNo, items]) => {
+            const isCollapsed = collapsedGroups[cNo];
 
-              {/* 🚨 고밀도 리스트 영역 (테이블 구조 차용) */}
-              <div className="flex flex-col divide-y divide-[#222]">
-                {items.map(i => (
-                  <div 
-                    key={i.id} 
-                    onClick={() => { setSelectedItem(i); setIsModalOpen(true); }}
-                    className="flex flex-col md:flex-row justify-between items-start md:items-center px-5 py-3 bg-[#0a0a0a] hover:bg-[#151515] transition-colors cursor-pointer gap-4 md:gap-0"
-                  >
-                    {/* 좌측 정보 (위치, 이름, 계약자) */}
-                    <div className="flex items-center gap-5 flex-1 min-w-0">
-                      <div className="w-28 text-xs text-blue-500 font-black tracking-widest truncate">{String(i.location || '-')}</div>
-                      <div className="w-24 text-base font-black text-gray-100 truncate">{String(i.deceased_name || '-')}</div>
-                      <div className="w-20 text-xs text-gray-500 truncate">{String(i.contractor || '-')}</div>
-                      <div className="hidden lg:flex w-32 text-[10px] text-gray-600 truncate gap-2">
-                        <span>{String(i.size_spec || '-')}</span>
-                        <span>|</span>
-                        <span>{String(i.religion || '-')}</span>
-                      </div>
-                    </div>
-
-                    {/* 우측 정보 (날짜, 상태) */}
-                    <div className="flex items-center gap-4 shrink-0 w-full md:w-auto justify-between md:justify-end">
-                      <div className="text-xs text-gray-400 font-mono tracking-wider">{i.scheduled_date || '일정미정'}</div>
-                      <div className={`text-[10px] w-16 text-center px-2 py-1 rounded font-black ${i.status === '완료' || i.status === '설치완료' ? 'bg-[#222] text-gray-600' : 'bg-green-900/40 text-green-400 border border-green-800/50'}`}>
-                        {i.status || '접수'}
-                      </div>
-                    </div>
+            return (
+              <div key={cNo} className="bg-[#111] rounded-xl overflow-hidden border border-[#333] shadow-lg transition-all duration-200">
+                
+                {/* 📂 폴더 헤더 (클릭 시 접기/펴기) */}
+                <div 
+                  onClick={() => toggleGroup(cNo)}
+                  className="bg-[#1a1a1a] hover:bg-[#222] px-5 py-3 flex justify-between items-center cursor-pointer transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <i className={`ph ${isCollapsed ? 'ph-folder' : 'ph-folder-open'} text-blue-500 text-xl transition-all`}></i>
+                    <h3 className="text-sm font-black text-white uppercase tracking-wider">{cNo.startsWith('개별접수') ? '개별 건 (계약번호 없음)' : `계약번호: ${cNo}`}</h3>
                   </div>
-                ))}
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] text-gray-400 font-bold bg-[#000] px-2 py-0.5 rounded-md border border-[#333]">{items.length}건</span>
+                    <i className={`ph ${isCollapsed ? 'ph-caret-down' : 'ph-caret-up'} text-gray-500 text-lg transition-transform`}></i>
+                  </div>
+                </div>
+
+                {/* 🚨 폴더 내부 (접혔을 때는 렌더링하지 않음) */}
+                {!isCollapsed && (
+                  <div className="flex flex-col divide-y divide-[#222] border-t border-[#333]">
+                    {items.map(i => (
+                      <div 
+                        key={i.id} 
+                        onClick={() => { setSelectedItem(i); setIsModalOpen(true); }}
+                        className="flex flex-col md:flex-row justify-between items-start md:items-center px-5 py-3 bg-[#0a0a0a] hover:bg-[#151515] transition-colors cursor-pointer gap-4 md:gap-0"
+                      >
+                        {/* 좌측 정보 (위치, 이름, 계약자) */}
+                        <div className="flex items-center gap-5 flex-1 min-w-0">
+                          <div className="w-28 text-xs text-blue-500 font-black tracking-widest truncate">{String(i.location || '-')}</div>
+                          <div className="w-24 text-base font-black text-gray-100 truncate">{String(i.deceased_name || '-')}</div>
+                          <div className="w-20 text-xs text-gray-500 truncate">{String(i.contractor || '-')}</div>
+                          <div className="hidden lg:flex w-32 text-[10px] text-gray-600 truncate gap-2">
+                            <span>{String(i.size_spec || '-')}</span>
+                            <span>|</span>
+                            <span>{String(i.religion || '-')}</span>
+                          </div>
+                        </div>
+
+                        {/* 우측 정보 (날짜, 상태) */}
+                        <div className="flex items-center gap-4 shrink-0 w-full md:w-auto justify-between md:justify-end">
+                          <div className="text-xs text-gray-400 font-mono tracking-wider">{i.scheduled_date || '일정미정'}</div>
+                          <div className={`text-[10px] w-16 text-center px-2 py-1 rounded font-black ${i.status === '완료' || i.status === '설치완료' ? 'bg-[#222] text-gray-600' : 'bg-green-900/40 text-green-400 border border-green-800/50'}`}>
+                            {i.status || '접수'}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {/* 🗔 상태 수정 & 상세 정보 모달 */}
           {isModalOpen && selectedItem && (
@@ -210,7 +229,7 @@
                         await supabase.from('engravings').update({ status: e.target.value }).eq('id', selectedItem.id);
                         window.location.reload();
                       }} 
-                      className="jake-input cursor-pointer text-lg font-black"
+                      className="w-full bg-[#000] text-white border border-[#444] rounded-2xl p-5 outline-none text-lg font-black cursor-pointer shadow-inner"
                     >
                       <option value="접수">접수</option>
                       <option value="작업중">작업중</option>
