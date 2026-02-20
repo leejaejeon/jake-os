@@ -17,20 +17,20 @@
     ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
     .glass-panel { background: rgba(15, 15, 15, 0.98); border: 1px solid #222; }
     
-    /* 현장 마스터 팔레트 */
+    /* 🎨 현장 마스터 팔레트 */
     .status-미분양 { background-color: #f3f4f6; color: #111; border-color: #d1d5db; }
     .status-예약 { background-color: #facc15; color: #422006; border-color: #ca8a04; }
+    .status-계약금 { background-color: #f97316; color: #fff; border-color: #ea580c; }
+    .status-홀딩 { background-color: #7c2d12; color: #ffedd5; border-color: #9a3412; font-weight: bold; }
     .status-안치 { background-color: #14532d; color: #dcfce7; border-color: #166534; font-weight: bold; }
-    .status-홀딩 { background-color: #7c2d12; color: #ffedd5; border-color: #9a3412; }
 
-    /* 🎨 각인 관리 전용 뱃지 색상 (Jake 지정) */
-    .eng-badge { padding: 4px 8px; border-radius: 6px; font-weight: 900; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-width: 1px; }
-    .eng-접수 { background-color: rgba(153, 27, 27, 0.2); color: #fca5a5; border-color: rgba(153, 27, 27, 0.5); }
-    .eng-디자인완료 { background-color: rgba(30, 58, 138, 0.2); color: #93c5fd; border-color: rgba(30, 58, 138, 0.5); }
-    .eng-각인완료 { background-color: rgba(133, 77, 14, 0.2); color: #fde047; border-color: rgba(133, 77, 14, 0.5); }
-    .eng-설치완료 { background-color: #111; color: #666; border-color: #333; }
+    /* 🎨 각인 관리 뱃지 색상 (Jake 지정) */
+    .eng-접수 { background-color: #451a1a; color: #fca5a5; border: 1px solid #991b1b; }
+    .eng-디자인완료 { background-color: #1e3a8a; color: #93c5fd; border: 1px solid #2563eb; }
+    .eng-각인완료 { background-color: #713f12; color: #fde047; border: 1px solid #ca8a04; }
+    .eng-설치완료 { background-color: #111; color: #666; border: 1px solid #333; }
 
-    /* 네이티브 아코디언 */
+    /* 🚨 네이티브 아코디언 */
     details > summary { list-style: none; outline: none; cursor: pointer; }
     details > summary::-webkit-details-marker { display: none; }
     details[open] summary ~ * { animation: sweep .2s ease-in-out; }
@@ -58,14 +58,14 @@
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxY2N4bmNpaWFqd3FkbXB3amR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MjA3MTMsImV4cCI6MjA4NzA5NjcxM30.L23-eq-DIPsbONOeX-xQ8UcMb7gtgTTTRpkaSm9HTw4';
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // 🚨 절대 서열 알고리즘 (0이 최상단, 숫자가 클수록 하단)
+    // 🚨 각인 서열 정리기 (정렬 무결성)
     const getEngPriority = (status) => {
       const s = String(status || '').trim();
       if (s === '접수') return 0;
       if (s === '디자인완료' || s === '시안대기') return 1;
       if (s === '각인완료' || s === '작업중' || s === '각인') return 2;
       if (s === '설치완료' || s === '완료') return 3;
-      return 0; // 이상한 값이면 무조건 눈에 띄게 맨 위(접수)로 올림
+      return 0; // 알 수 없으면 무조건 접수(상단)
     };
     
     const getEngClass = (status) => {
@@ -77,16 +77,15 @@
       return 'eng-접수';
     };
 
-    // [1. 탭 연동형 스마트 검색]
+    // [1. 통합 검색 - 실시간 드롭다운]
     function GlobalSearch({ onSelectResult, currentTab }) {
       const [query, setQuery] = useState('');
       const [results, setResults] = useState([]);
       useEffect(() => {
         if (query.trim().length < 2) { setResults([]); return; }
         const t = setTimeout(async () => {
-          // 각인 탭이면 각인 DB 검색, 아니면 마스터 DB 검색
           const tableName = currentTab === 'engraving' ? 'engravings' : 'master_locations';
-          const { data } = await supabase.from(tableName).select('*').or(`deceased_name.ilike.%${query}%,contractor.ilike.%${query}%`).limit(8);
+          const { data } = await supabase.from(tableName).select('*').or(`deceased_name.ilike.%${query}%,contractor.ilike.%${query}%`).limit(10);
           setResults(data || []);
         }, 300);
         return () => clearTimeout(t);
@@ -98,8 +97,8 @@
           {results.length > 0 && (
             <div className="absolute top-full left-0 right-0 mt-2 glass-panel rounded-xl shadow-[0_30px_60px_rgba(0,0,0,0.9)] z-[9999] p-2 border border-[#444] max-h-80 overflow-y-auto">
               {results.map(res => (
-                <div key={res.id} onClick={() => { onSelectResult(res); setQuery(''); setResults([]); }} className="p-4 hover:bg-blue-600/30 rounded-lg cursor-pointer border-b border-[#333] last:border-0 transition-colors">
-                  <div className="text-[10px] text-blue-400 font-bold mb-0.5">{res.section || res.location || '위치미상'}</div>
+                <div key={res.id} onClick={() => { onSelectResult(res); setQuery(''); setResults([]); }} className="p-4 hover:bg-[#222] rounded-lg cursor-pointer border-b border-[#333] last:border-0 transition-colors">
+                  <div className="text-[10px] text-blue-400 font-bold mb-1">{res.section || res.location || '위치미상'}</div>
                   <div className="font-bold text-gray-100">{res.deceased_name || '(공란)'} <span className="text-xs font-normal text-gray-500 ml-2">| {res.contractor}</span></div>
                 </div>
               ))}
@@ -122,7 +121,7 @@
       const handleSave = async () => {
         setIsSaving(true);
         const { error } = await supabase.from('engravings').update(formData).eq('id', formData.id);
-        if (!error) window.location.reload(); // 즉시 리로드로 딜레이 제거
+        if (!error) window.location.reload(); 
         setIsSaving(false);
       };
 
@@ -148,17 +147,15 @@
               </div>
 
               <div className="space-y-4 pt-2">
-                {/* 🚨 작업 상태 선택 (색상 연동) */}
                 <div className="p-5 bg-[#0a0a0a] rounded-xl border border-[#222]">
                   <label className="text-xs font-black text-blue-400 uppercase tracking-widest block mb-2">작업 진행 상태</label>
-                  <select name="status" value={formData.status || '접수'} onChange={handleChange} className="jake-input text-xl text-white cursor-pointer">
+                  <select name="status" value={formData.status || '접수'} onChange={handleChange} className={`jake-input text-xl text-white cursor-pointer ${getEngClass(formData.status)}`}>
                     <option value="접수">접수</option>
                     <option value="디자인완료">디자인완료</option>
                     <option value="각인완료">각인완료</option>
                     <option value="설치완료">설치완료</option>
                   </select>
                 </div>
-                
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-gray-500 uppercase">각인 레이아웃</label>
                   <textarea name="grave_layout" value={formData.grave_layout || ''} onChange={handleChange} className="jake-input h-28 font-mono leading-relaxed" />
@@ -215,21 +212,19 @@
             const pA = getEngPriority(a.status);
             const pB = getEngPriority(b.status);
             if (pA !== pB) return pA - pB;
-            const dateA = new Date(a.scheduled_date || '2099-12-31').getTime();
-            const dateB = new Date(b.scheduled_date || '2099-12-31').getTime();
-            return dateB - dateA; // 미래 날짜가 최상단
+            const dateA = new Date(a.scheduled_date || '2099-12-31').getTime() || 0;
+            const dateB = new Date(b.scheduled_date || '2099-12-31').getTime() || 0;
+            return dateB - dateA;
           });
           return { cNo, items };
         });
 
-        // 폴더 간 정렬 (폴더 안에서 가장 우선순위가 높은 데이터 기준)
         folderArray.sort((folderA, folderB) => {
           const pA = Math.min(...folderA.items.map(i => getEngPriority(i.status)));
           const pB = Math.min(...folderB.items.map(i => getEngPriority(i.status)));
           if (pA !== pB) return pA - pB; 
-          
-          const dateA = Math.max(...folderA.items.filter(i => getEngPriority(i.status) === pA).map(i => new Date(i.scheduled_date || '2099-12-31').getTime()));
-          const dateB = Math.max(...folderB.items.filter(i => getEngPriority(i.status) === pB).map(i => new Date(i.scheduled_date || '2099-12-31').getTime()));
+          const dateA = Math.max(...folderA.items.filter(i => getEngPriority(i.status) === pA).map(i => new Date(i.scheduled_date || '2099-12-31').getTime() || 0));
+          const dateB = Math.max(...folderB.items.filter(i => getEngPriority(i.status) === pB).map(i => new Date(i.scheduled_date || '2099-12-31').getTime() || 0));
           return dateB - dateA;
         });
 
@@ -255,20 +250,31 @@
                   const deceasedNames = folderInfo.items.map(i => i.deceased_name).join(', ');
                   const folderTitle = folderInfo.cNo.startsWith('개별') ? '개별 건' : folderInfo.cNo;
 
+                  // 🚨 요약 뱃지 카운팅
+                  const counts = { '접수': 0, '디자인완료': 0, '각인완료': 0, '설치완료': 0 };
+                  folderInfo.items.forEach(i => {
+                    const p = getEngPriority(i.status);
+                    if(p===0) counts['접수']++;
+                    if(p===1) counts['디자인완료']++;
+                    if(p===2) counts['각인완료']++;
+                    if(p===3) counts['설치완료']++;
+                  });
+
                   return (
-                    <details key={folderInfo.cNo} open className="bg-[#111] rounded-xl overflow-hidden border border-[#222] shadow-lg group">
+                    <details key={folderInfo.cNo} className="bg-[#111] rounded-xl overflow-hidden border border-[#222] shadow-lg group">
                       <summary className="bg-[#1a1a1a] hover:bg-[#222] px-5 py-4 flex justify-between items-center transition-colors">
                         <div className="flex items-center gap-3">
-                          <i className="ph ph-folder-open text-blue-500 text-xl group-open:block hidden"></i>
-                          <i className="ph ph-folder text-blue-500 text-xl group-open:hidden block"></i>
+                          <i className="ph ph-folder text-blue-500 text-xl group-open:text-blue-400"></i>
                           <h3 className="text-sm font-black text-white">
                             {folderTitle} <span className="text-blue-400 font-bold ml-1">({contractor})</span>
-                            <span className="text-gray-500 font-medium ml-2">- {deceasedNames}</span>
+                            <span className="text-gray-500 font-medium ml-2 hidden md:inline-block">- {deceasedNames}</span>
                           </h3>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-[10px] text-gray-400 font-bold bg-[#000] px-2 py-0.5 rounded border border-[#333]">{folderInfo.items.length}건</span>
-                          <i className="ph ph-caret-down text-gray-500 text-lg group-open:rotate-180 transition-transform"></i>
+                        <div className="flex items-center gap-2">
+                          {counts['접수'] > 0 && <span className="text-[10px] eng-접수 px-2 py-0.5 rounded">접수 {counts['접수']}</span>}
+                          {counts['디자인완료'] > 0 && <span className="text-[10px] eng-디자인완료 px-2 py-0.5 rounded">디자인 {counts['디자인완료']}</span>}
+                          {counts['각인완료'] > 0 && <span className="text-[10px] eng-각인완료 px-2 py-0.5 rounded">각인 {counts['각인완료']}</span>}
+                          <i className="ph ph-caret-down text-gray-500 text-lg group-open:rotate-180 transition-transform ml-2"></i>
                         </div>
                       </summary>
                       
@@ -284,8 +290,8 @@
                             </div>
                             <div className="flex items-center gap-6 shrink-0 w-full md:w-auto justify-between md:justify-end">
                               <div className="text-[11px] text-gray-400 font-mono font-bold tracking-widest">{i.scheduled_date || '일정미정'}</div>
-                              <div className={`eng-badge w-20 text-center ${getEngClass(i.status)}`}>
-                                {i.status || '접수'}
+                              <div className={`text-[11px] w-24 text-center py-1.5 rounded-md font-black ${getEngClass(i.status)}`}>
+                                {getEngPriority(i.status) === 0 ? '접수' : getEngPriority(i.status) === 1 ? '디자인완료' : getEngPriority(i.status) === 2 ? '각인완료' : '설치완료'}
                               </div>
                             </div>
                           </div>
@@ -319,51 +325,56 @@
         days.push(
           <div key={d} className={`calendar-day border border-[#333] ${new Date().toISOString().startsWith(dateStr) ? 'today' : ''}`}>
             <div className="text-xs font-bold text-gray-500 mb-1">{d}</div>
-            <div className="space-y-1 h-[80px] overflow-y-auto pr-1">
-              {dayItems.map(i => (
-                <div key={i.id} onClick={(e) => { e.stopPropagation(); onSelect(i); }} className={`eng-badge ${getEngClass(i.status)} truncate px-1.5 py-1 text-center`}>
-                  {i.deceased_name}
-                </div>
-              ))}
+            <div className="space-y-1 h-[90px] overflow-y-auto pr-1">
+              {dayItems.map(i => {
+                const statusName = getEngPriority(i.status) === 0 ? '접수' : getEngPriority(i.status) === 1 ? '디자인' : getEngPriority(i.status) === 2 ? '각인' : '설치';
+                return (
+                  <div key={i.id} onClick={(e) => { e.stopPropagation(); onSelect(i); }} className={`eng-badge ${getEngClass(i.status)} text-[10px]`}>
+                    {i.deceased_name} <span className="opacity-70 font-normal ml-1">({statusName})</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         );
       }
       return (
-        <div className="h-full flex flex-col bg-[#111] rounded-3xl overflow-hidden border border-[#222]">
-          <div className="p-6 flex justify-between items-center bg-[#1a1a1a]">
+        <div className="h-full flex flex-col bg-[#111] rounded-2xl overflow-hidden border border-[#222]">
+          <div className="p-5 flex justify-between items-center bg-[#1a1a1a]">
             <h2 className="text-2xl font-black text-white">{currentDate.getFullYear()}년 {currentDate.getMonth() + 1}월</h2>
             <div className="flex gap-2">
-              <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth()-1)))} className="p-3 bg-[#222] rounded-xl hover:bg-[#333] text-white"><i className="ph ph-caret-left"></i></button>
-              <button onClick={() => setCurrentDate(new Date())} className="px-5 py-2 bg-[#222] rounded-xl hover:bg-[#333] text-sm font-bold text-white">오늘</button>
-              <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth()+1)))} className="p-3 bg-[#222] rounded-xl hover:bg-[#333] text-white"><i className="ph ph-caret-right"></i></button>
+              <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth()-1)))} className="p-2 bg-[#222] rounded hover:bg-[#333] text-white"><i className="ph ph-caret-left text-xl"></i></button>
+              <button onClick={() => setCurrentDate(new Date())} className="px-5 py-2 bg-[#222] rounded hover:bg-[#333] text-sm font-bold text-white">이번 달</button>
+              <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth()+1)))} className="p-2 bg-[#222] rounded hover:bg-[#333] text-white"><i className="ph ph-caret-right text-xl"></i></button>
             </div>
           </div>
-          <div className="grid grid-cols-7 text-center text-[10px] py-3 bg-[#000] text-gray-600 font-bold border-b border-[#222] tracking-widest">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=> <div key={d}>{d}</div>)}</div>
+          <div className="grid grid-cols-7 text-center text-[10px] py-2 bg-[#000] text-gray-600 font-bold border-b border-[#222] tracking-widest">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=> <div key={d}>{d}</div>)}</div>
           <div className="calendar-grid flex-1 overflow-y-auto">{days}</div>
         </div>
       );
     }
 
-    // [3. 통합 일정 - 빈 화면 방지]
+    // [3. 통합 일정 - 빈 화면 방어 로직 복구]
     function CalendarView() {
       const [events, setEvents] = useState([]);
       const [loading, setLoading] = useState(true);
+      const [currentDate, setCurrentDate] = useState(new Date());
+      const [selectedDate, setSelectedDate] = useState(null);
+      const [isModalOpen, setIsModalOpen] = useState(false);
 
       useEffect(() => {
         async function fetchAll() {
           try {
-            // 테이블이 없을 경우를 대비한 방어 로직 (try-catch)
             const { data: inter, error: e1 } = await supabase.from('interments').select('*');
             const { data: pipe, error: e2 } = await supabase.from('sales_pipeline').select('*');
             
             let merged = [];
-            if (inter) merged = [...merged, ...inter.map(i => ({ date: i.scheduled_date, title: i.deceased_name, type: '안치' }))];
-            if (pipe) merged = [...merged, ...pipe.map(p => ({ date: p.visit_date, title: p.customer_name, type: '답사' }))];
+            if (inter) merged = [...merged, ...inter.map(i => ({ date: i.scheduled_date, title: i.deceased_name, type: '안치', memo: i.memo }))];
+            if (pipe) merged = [...merged, ...pipe.map(p => ({ date: p.visit_date, title: p.customer_name, type: '답사', memo: p.memo }))];
             
             setEvents(merged.filter(e => e.date));
           } catch (error) {
-            console.log("통합일정 테이블 없음. 안전하게 패스합니다.", error);
+            console.log("통합일정 데이터 없음", error);
           }
           setLoading(false);
         }
@@ -372,16 +383,70 @@
 
       if (loading) return <div className="p-10 text-center font-black text-gray-500 uppercase tracking-widest mt-20">Loading Calendar...</div>;
 
+      const days = [];
+      const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+      const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
+      
+      for (let i = 0; i < firstDay; i++) days.push(<div key={`e-${i}`} className="calendar-day opacity-5"></div>);
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const dayEvents = events.filter(e => e.date === dateStr);
+        days.push(
+          <div key={d} className={`calendar-day border border-gray-800/30 ${new Date().toISOString().startsWith(dateStr) ? 'today' : ''}`} onClick={() => { setSelectedDate(dateStr); setIsModalOpen(true); }}>
+            <div className="text-xs font-bold text-gray-500 mb-1">{d}</div>
+            <div className="space-y-1 h-[80px] overflow-y-auto">
+              {dayEvents.map((e, idx) => (
+                <div key={idx} className={`text-[10px] px-1.5 py-1 rounded truncate border font-bold ${e.type === '안치' ? 'bg-green-900/40 text-green-300 border-green-800' : 'bg-yellow-900/40 text-yellow-300 border-yellow-800'}`}>
+                  {e.type[0]} {e.title}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      }
+
+      const selectedDayEvents = events.filter(e => e.date === selectedDate);
+
       return (
-        <div className="flex flex-col items-center justify-center h-full text-gray-500 border-2 border-dashed border-[#333] rounded-3xl">
-          <i className="ph ph-calendar-check text-6xl mb-4 text-[#444]"></i>
-          <p className="font-bold text-lg text-gray-400">통합 일정 데이터 준비 중</p>
-          <p className="text-xs text-gray-600 mt-2">각인 관리의 '각인 달력'을 이용해 주세요.</p>
+        <div className="h-full glass-panel rounded-3xl overflow-hidden flex flex-col border border-[#222]">
+          <div className="p-6 flex justify-between items-center bg-[#1a1a1a]">
+            <h2 className="text-2xl font-black text-white">{currentDate.getFullYear()}년 {currentDate.getMonth() + 1}월 통합 일정</h2>
+            <div className="flex gap-4">
+              <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth()-1)))} className="p-3 bg-[#222] rounded-xl hover:bg-[#333] text-white"><i className="ph ph-caret-left text-xl"></i></button>
+              <button onClick={() => setCurrentDate(new Date())} className="px-5 py-2 bg-[#222] rounded-xl hover:bg-[#333] text-sm font-bold text-white">오늘</button>
+              <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth()+1)))} className="p-3 bg-[#222] rounded-xl hover:bg-[#333] text-white"><i className="ph ph-caret-right text-xl"></i></button>
+            </div>
+          </div>
+          <div className="grid grid-cols-7 text-center text-[11px] py-3 bg-[#000] text-gray-600 font-bold border-b border-[#222] tracking-widest">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=> <div key={d}>{d}</div>)}</div>
+          <div className="calendar-grid flex-1 overflow-y-auto">{days}</div>
+
+          {isModalOpen && (
+            <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" onClick={() => setIsModalOpen(false)}>
+              <div className="bg-[#1a1a1a] border border-[#333] rounded-[2.5rem] w-full max-w-sm p-10 shadow-2xl" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-start mb-8">
+                  <div><h3 className="text-2xl font-black text-white">{selectedDate?.split('-')[2]}일 일정</h3><p className="text-sm text-blue-500 font-mono font-bold mt-2">{selectedDate}</p></div>
+                  <button onClick={() => setIsModalOpen(false)}><i className="ph ph-x text-3xl text-gray-500 hover:text-white" /></button>
+                </div>
+                <div className="space-y-4 max-h-80 overflow-y-auto pr-2">
+                  {selectedDayEvents.length === 0 ? <p className="text-gray-600 text-center py-10 font-bold bg-[#111] rounded-2xl">등록된 일정이 없습니다.</p> : 
+                    selectedDayEvents.map((e, i) => (
+                      <div key={i} className={`p-6 rounded-2xl border ${e.type === '안치' ? 'bg-green-900/10 border-green-800' : 'bg-yellow-900/10 border-yellow-800'}`}>
+                        <span className={`text-xs font-black px-3 py-1.5 rounded-lg mb-3 inline-block ${e.type === '안치' ? 'bg-green-700 text-white' : 'bg-yellow-600 text-black'}`}>{e.type}</span>
+                        <div className="text-xl font-black text-white tracking-tight">{e.title}</div>
+                        {e.memo && <div className="text-sm text-gray-400 mt-4 p-4 bg-[#0a0a0a] rounded-xl leading-relaxed whitespace-pre-wrap border border-[#222]">{e.memo}</div>}
+                      </div>
+                    ))
+                  }
+                </div>
+                <button onClick={() => setIsModalOpen(false)} className="w-full mt-8 bg-blue-600 hover:bg-blue-500 py-5 rounded-2xl font-black text-white transition-all shadow-xl active:scale-95">닫기</button>
+              </div>
+            </div>
+          )}
         </div>
       );
     }
 
-    // [4. 현장 마스터 - 정보 보강]
+    // [4. 현장 마스터 - 정보 풀스펙 복구 (생졸 제외)]
     function FieldMaster({ highlightId }) {
       const [locations, setLocations] = useState([]); const [sections, setSections] = useState([]); const [activeSection, setActiveSection] = useState(''); const [loading, setLoading] = useState(true);
       const [isModalOpen, setIsModalOpen] = useState(false); const [selectedSlot, setSelectedSlot] = useState(null);
@@ -408,7 +473,7 @@
         }
       }, [highlightId, locations]);
 
-      if (loading) return <div className="p-10 text-center animate-pulse font-black tracking-widest text-blue-500 uppercase">Syncing Map Data...</div>;
+      if (loading) return <div className="p-10 text-center animate-pulse font-black text-blue-500 uppercase">Syncing Map...</div>;
 
       const currentData = locations.filter(l => l.section === activeSection);
       const layout = rowConfig[activeSection] || [20]; 
@@ -420,7 +485,7 @@
         rows.push(
           <div key={rIdx} className="row-container">
             {rowData.map(i => i.id.includes('SPACER') ? <div key={i.id} className="slot-spacer" /> : (
-              <div key={i.id} className={`slot status-${i.status || '미분양'} ${highlightId === i.id ? 'ring-4 ring-blue-500 scale-110 z-[50] shadow-2xl shadow-blue-500/50' : ''}`} onClick={() => { setSelectedSlot(i); setIsModalOpen(true); }}>
+              <div key={i.id} className={`slot status-${i.status || '미분양'} ${highlightId === i.id ? 'ring-4 ring-blue-500 scale-110 z-[50] shadow-2xl' : ''}`} onClick={() => { setSelectedSlot(i); setIsModalOpen(true); }}>
                 <div className="font-mono text-[10px] opacity-70 font-bold mb-1">{i.slot_no}</div>
                 <div className="truncate w-full px-1 font-black text-[12px]">{i.deceased_name || ''}</div>
               </div>
@@ -430,37 +495,53 @@
         curIdx += count;
       });
 
+      // 팝업 데이터 편집 핸들러
+      const handlePopupChange = (e) => {
+        const { name, value } = e.target;
+        setSelectedSlot(prev => ({ ...prev, [name]: value }));
+      };
+      const handlePopupSave = async () => {
+        await supabase.from('master_locations').update(selectedSlot).eq('id', selectedSlot.id);
+        setLocations(prev => prev.map(l => l.id === selectedSlot.id ? selectedSlot : l));
+        setIsModalOpen(false);
+      };
+
       return (
         <div className="flex flex-col h-full glass-panel rounded-3xl overflow-hidden border border-[#222]">
-          <div className="flex overflow-x-auto bg-[#161616] p-5 gap-3 border-b border-[#2a2a2a] shrink-0">
-            {sections.map(s => <button key={s} onClick={() => setActiveSection(s)} className={`px-5 py-2.5 rounded-xl text-xs font-black whitespace-nowrap transition-all ${activeSection === s ? 'bg-blue-600 text-white shadow-lg' : 'bg-[#222] text-gray-500 hover:text-white'}`}>{s}</button>)}
+          <div className="flex overflow-x-auto bg-[#161616] p-4 gap-2 border-b border-[#2a2a2a] shrink-0">
+            {sections.map(s => <button key={s} onClick={() => setActiveSection(s)} className={`px-4 py-2 rounded-xl text-xs font-black whitespace-nowrap transition-colors ${activeSection === s ? 'bg-blue-600 text-white' : 'bg-[#222] text-gray-500 hover:text-white'}`}>{s}</button>)}
           </div>
           <div className="flex-1 overflow-auto p-8 bg-[#000]"><div className="w-max pb-32">{rows}</div></div>
-          {isModalOpen && (
+          
+          {/* 현장 마스터 전용 모달 (계약번호, 계약자, 고인명, 메모, 상태) */}
+          {isModalOpen && selectedSlot && (
             <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" onClick={() => setIsModalOpen(false)}>
-              <div className="bg-[#1a1a1a] border border-[#333] rounded-[2.5rem] w-full max-w-sm p-10 shadow-2xl" onClick={e => e.stopPropagation()}>
+              <div className="bg-[#1a1a1a] border border-[#333] rounded-[2.5rem] w-full max-w-lg p-10 shadow-2xl" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-start mb-6 border-b border-[#333] pb-4">
                   <div>
-                    <h3 className="text-3xl font-black text-white">{selectedSlot.deceased_name || '이름 없음'}</h3>
-                    <p className="text-base text-blue-500 font-bold mt-2 tracking-widest">{selectedSlot.section} {selectedSlot.slot_no}</p>
+                    <h3 className="text-2xl font-black text-white">{selectedSlot.section} {selectedSlot.slot_no}</h3>
+                    <p className="text-sm text-blue-500 font-bold mt-2">현장 마스터 정보 관리</p>
                   </div>
                   <button onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-white transition-colors"><i className="ph ph-x text-3xl" /></button>
                 </div>
+                
                 <div className="space-y-4">
-                   <div className="p-4 bg-black rounded-xl border border-[#333]">
-                     <div className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-1">계약번호</div>
-                     <div className="text-base text-gray-100 font-bold">{selectedSlot.contract_no || '-'}</div>
-                   </div>
-                   <div className="p-4 bg-black rounded-xl border border-[#333]">
-                     <div className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-1">계약자</div>
-                     <div className="text-base text-gray-100 font-bold">{selectedSlot.contractor || '-'}</div>
-                   </div>
-                   <div className="p-4 bg-black rounded-xl border border-[#333]">
-                     <div className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-2">메모</div>
-                     <div className="text-sm text-gray-400 whitespace-pre-wrap leading-relaxed min-h-[60px]">{selectedSlot.memo || '-'}</div>
-                   </div>
+                  <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">분양 상태</label>
+                    <select name="status" value={selectedSlot.status || '미분양'} onChange={handlePopupChange} className="jake-input cursor-pointer">
+                      <option value="미분양">미분양</option><option value="예약">예약</option><option value="계약금">계약금</option><option value="홀딩">홀딩</option><option value="안치">안치</option>
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">계약번호</label><input name="contract_no" value={selectedSlot.contract_no || ''} onChange={handlePopupChange} className="jake-input" /></div>
+                    <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">계약자명</label><input name="contractor" value={selectedSlot.contractor || ''} onChange={handlePopupChange} className="jake-input" /></div>
+                  </div>
+                  <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">고인명</label><input name="deceased_name" value={selectedSlot.deceased_name || ''} onChange={handlePopupChange} className="jake-input text-white" /></div>
+                  
+                  <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">특이사항 메모</label>
+                    <textarea name="memo" value={selectedSlot.memo || ''} onChange={handlePopupChange} className="jake-input h-24" />
+                  </div>
                 </div>
-                <button onClick={() => setIsModalOpen(false)} className="w-full bg-[#333] hover:bg-[#444] py-5 rounded-2xl font-black text-white mt-8 transition-all shadow-xl active:scale-95">닫기</button>
+                <button onClick={handlePopupSave} className="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl font-black text-white mt-8 transition-colors shadow-xl">정보 저장하기</button>
               </div>
             </div>
           )}
@@ -470,7 +551,28 @@
 
     // [5. 프로젝트 칸반]
     function KanbanBoard() {
-      return <div className="p-10 text-center font-black text-gray-600 uppercase text-2xl mt-20">PROJECT MODULE STANDBY</div>;
+      const [projects, setProjects] = useState([]); const [loading, setLoading] = useState(true);
+      useEffect(() => { async function fetch() { const { data } = await supabase.from('projects').select('*').order('start_date', { ascending: false }); setProjects(data || []); setLoading(false); } fetch(); }, []);
+      if (loading) return <div className="p-10 text-center animate-pulse font-black uppercase text-blue-500 tracking-widest">Loading Projects...</div>;
+      const cols = [{ id: '준비', title: '📝 준비', c: 'border-gray-600' },{ id: '진행중', title: '🚀 진행중', c: 'border-blue-600' },{ id: '보류', title: '⏸️ 보류', c: 'border-orange-600' },{ id: '완료', title: '✅ 완료', c: 'border-green-800' }];
+      return (
+        <div className="flex gap-6 overflow-x-auto h-full pb-10 items-start">
+          {cols.map(col => (
+            <div key={col.id} className="w-80 flex flex-col h-full glass-panel rounded-[2rem] p-6 shrink-0 bg-[#0f0f0f] border border-[#222]">
+              <div className={`text-base font-black mb-6 border-b-2 pb-3 ${col.c} text-gray-300 flex justify-between uppercase tracking-widest`}><span>{col.title}</span><span className="text-xs bg-[#000] px-3 py-1 rounded-xl border border-[#333]">{projects.filter(p=>p.status===col.id).length}</span></div>
+              <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+                {projects.filter(p => p.status === col.id).map(p => (
+                  <div key={p.id} className="bg-[#181818] p-5 rounded-2xl border border-[#2a2a2a] shadow-lg hover:border-blue-500/50 transition-all border-l-4 border-l-gray-600 cursor-pointer">
+                    <div className="text-[10px] text-gray-500 mb-2 font-mono font-bold">{p.id}</div>
+                    <div className="font-black text-base text-gray-100 leading-snug">{p.title}</div>
+                    <div className="flex justify-between mt-5 text-[11px] text-gray-500 font-black uppercase tracking-widest"><span><i className="ph ph-user mr-1"></i>{p.personnel || '미정'}</span><span><i className="ph ph-clock mr-1"></i>{p.end_date || '-'}</span></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      );
     }
 
     // [6. 메인 앱 라우터]
