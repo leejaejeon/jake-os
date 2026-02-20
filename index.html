@@ -26,28 +26,29 @@
     .slot { 
       width: 80px; min-width: 80px; height: 65px; 
       display: flex; flex-direction: column; justify-content: center; align-items: center; 
-      border-radius: 6px; font-size: 0.7rem; text-align: center; border: 2px solid transparent; 
+      border-radius: 6px; font-size: 0.7rem; text-align: center; 
+      border: 1px solid transparent; /* 두꺼운 네온 테두리 제거, 얇은 1px 라인 적용 */
       cursor: pointer; transition: transform 0.1s, filter 0.2s; 
     }
     .slot:active { transform: scale(0.95); }
     .slot-spacer { visibility: hidden; pointer-events: none; border: none; }
     
-    /* 🎨 시인성 극대화 컬러 팔레트 (High Contrast) */
-    /* 1. 미분양(공백): 요청하신 밝은 흰색/회색 계열로 반전 (가장 눈에 띔) */
-    .status-미분양 { background-color: #f3f4f6; color: #111111; border-color: #d1d5db; box-shadow: inset 0 0 5px rgba(0,0,0,0.1); }
+    /* 🎨 적녹 색약(Colorblind) 맞춤형 차분한 팔레트 */
+    /* 1. 미분양(공백): 밝은 회색/흰색 톤 유지 (가장 명확한 대비) */
+    .status-미분양 { background-color: #f3f4f6; color: #111111; border-color: #d1d5db; }
     
-    /* 2. 예약: 눈에 띄는 진노랑 배경 + 밝은 금색 테두리 */
-    .status-예약 { background-color: #423500; color: #fde047; border-color: #eab308; }
+    /* 2. 예약: 스카이 블루 (적녹과 무관하게 명확히 인지되는 색) */
+    .status-예약 { background-color: #0c4a6e; color: #bae6fd; border-color: #0369a1; }
     
-    /* 3. 계약금: 짙은 주황 배경 + 쨍한 오렌지 테두리 */
-    .status-계약금 { background-color: #5c2700; color: #fdba74; border-color: #f97316; }
+    /* 3. 계약금: 차분한 골드/머스터드 (노란색 계열) */
+    .status-계약금 { background-color: #713f12; color: #fef08a; border-color: #a16207; }
     
-    /* 4. 홀딩: 위험/경고를 알리는 짙은 붉은 배경 + 강렬한 빨간 테두리 */
-    .status-홀딩 { background-color: #5f1010; color: #fca5a5; border-color: #ef4444; font-weight: bold; }
+    /* 4. 홀딩: 붉은색 대신 명확히 구분되는 '보라색(Purple)' 사용 */
+    .status-홀딩 { background-color: #4a044e; color: #fbcfe8; border-color: #a21caf; font-weight: bold; }
     
-    /* 5. 안치: 편안하지만 뚜렷한 포레스트 그린 배경 + 녹색 테두리 */
-    .status-안치 { background-color: #064e3b; color: #a7f3d0; border-color: #22c55e; font-weight: bold; }
-    .status-안치 .deceased-name { color: #ffffff; font-size: 0.75rem; } /* 고인명은 순백색으로 가장 크고 뚜렷하게 */
+    /* 5. 안치: 초록색 대신 '어두운 청회색(Dark Slate)'을 사용하여 차분하고 묵직한 마감 느낌 부여 */
+    .status-안치 { background-color: #1e293b; color: #cbd5e1; border-color: #475569; font-weight: bold; }
+    .status-안치 .deceased-name { color: #ffffff; font-size: 0.75rem; } 
   </style>
 </head>
 <body>
@@ -60,9 +61,6 @@
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxY2N4bmNpaWFqd3FkbXB3amR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MjA3MTMsImV4cCI6MjA4NzA5NjcxM30.L23-eq-DIPsbONOeX-xQ8UcMb7gtgTTTRpkaSm9HTw4';
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // ==========================================
-    // 1. 칸반 보드 컴포넌트
-    // ==========================================
     function KanbanBoard() {
       const [projects, setProjects] = useState([]);
       const [loading, setLoading] = useState(true);
@@ -80,8 +78,8 @@
       const columns = [
         { id: '준비', title: '📝 준비', border: 'border-gray-500' },
         { id: '진행중', title: '🚀 진행중', border: 'border-blue-500' },
-        { id: '보류', title: '⏸️ 보류', border: 'border-yellow-600' },
-        { id: '완료', title: '✅ 완료', border: 'border-green-600' }
+        { id: '보류', title: '⏸️ 보류', border: 'border-purple-600' },
+        { id: '완료', title: '✅ 완료', border: 'border-slate-500' }
       ];
 
       if (loading) return <div className="p-8 text-center text-gray-400 animate-pulse">칸반 데이터 동기화 중...</div>;
@@ -118,9 +116,6 @@
       );
     }
 
-    // ==========================================
-    // 2. 현장 마스터 컴포넌트
-    // ==========================================
     function FieldMaster() {
       const [locations, setLocations] = useState([]);
       const [sections, setSections] = useState([]);
@@ -201,7 +196,6 @@
               </button>
             ))}
           </div>
-
           <div className="flex-1 overflow-auto p-4 bg-[#111]">
             <div className="w-max pb-10">
               {rows.length > 0 ? rows : <div className="text-gray-500">이 구역의 데이터가 없습니다.</div>}
@@ -211,9 +205,6 @@
       );
     }
 
-    // ==========================================
-    // 3. 메인 App Shell
-    // ==========================================
     function App() {
       const [currentTab, setCurrentTab] = useState('field');
       const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -227,7 +218,6 @@
 
       return (
         <div className="flex h-screen bg-[#121212] overflow-hidden">
-          
           {isSidebarOpen && <div className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden" onClick={() => setIsSidebarOpen(false)}></div>}
 
           <aside className={`fixed md:static inset-y-0 left-0 z-50 w-64 glass-panel border-r border-[#333] transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-200 ease-in-out flex flex-col`}>
@@ -269,7 +259,6 @@
               )}
             </div>
           </main>
-          
         </div>
       );
     }
