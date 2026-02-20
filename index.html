@@ -22,14 +22,14 @@
     .status-안치 { background-color: #14532d; color: #dcfce7; border-color: #166534; font-weight: bold; }
     .status-홀딩 { background-color: #7c2d12; color: #ffedd5; border-color: #9a3412; }
 
-    /* 🎨 각인 상태 뱃지 */
+    /* 🎨 각인 상태 뱃지 (4단계 고정) */
     .eng-badge { padding: 4px 8px; border-radius: 6px; font-weight: 900; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-width: 1px; cursor: pointer;}
     .eng-접수 { background-color: #451a1a; color: #fca5a5; border-color: #991b1b; }
     .eng-디자인완료 { background-color: #1e3a8a; color: #93c5fd; border-color: #2563eb; }
     .eng-각인완료 { background-color: #713f12; color: #fde047; border-color: #ca8a04; }
     .eng-설치완료 { background-color: #111; color: #666; border-color: #333; opacity: 0.8; }
     
-    /* 네이티브 아코디언 */
+    /* 🚨 네이티브 아코디언 */
     details > summary { list-style: none; outline: none; cursor: pointer; }
     details > summary::-webkit-details-marker { display: none; }
     details[open] summary ~ * { animation: sweep .2s ease-in-out; }
@@ -40,7 +40,6 @@
     .slot:active { transform: scale(0.95); }
     .slot-spacer { visibility: hidden; width: 82px; }
 
-    /* 🚨 달력 그리드 최소 높이 강제 (찌그러짐 방지) */
     .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: minmax(130px, auto); gap: 1px; background-color: #222; }
     .calendar-day { background-color: #111; padding: 6px; cursor: pointer; transition: background 0.1s; display: flex; flex-direction: column;}
     .calendar-day:hover { background-color: #1a1a1a; }
@@ -76,7 +75,7 @@
       return 'eng-접수';
     };
 
-    // 🚨 안전한 날짜 변환 함수 (NaN 에러 방어벽)
+    // 🚨 안전한 날짜 변환 함수 (NaN 에러 방어벽 및 오름차순 적용 위한 처리)
     const getSafeTime = (dateStr) => {
       if (!dateStr) return new Date('2099-12-31').getTime();
       const t = new Date(dateStr).getTime();
@@ -146,6 +145,7 @@
                 <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">고인명</label><input name="deceased_name" value={formData.deceased_name || ''} onChange={handleChange} className="jake-input" /></div>
                 <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">안치일정</label><input type="date" name="scheduled_date" value={formData.scheduled_date || ''} onChange={handleChange} className="jake-input" /></div>
                 
+                {/* 🚨 규격 및 종교 드롭다운화 */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-gray-500 uppercase">규격</label>
                   <select name="size_spec" value={formData.size_spec || ''} onChange={handleChange} className="jake-input cursor-pointer">
@@ -166,7 +166,7 @@
                     <option value="불교 만자 추가">불교 만자 추가</option>
                   </select>
                 </div>
-                <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">위치 정보 (구역/번호)</label><input name="location" value={formData.location || ''} onChange={handleChange} className="jake-input text-blue-400" /></div>
+                <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">위치 정보 (동/구역/번호)</label><input name="location" value={formData.location || ''} onChange={handleChange} className="jake-input text-blue-400" /></div>
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-[#1a1a1a] rounded-xl border border-[#222]">
@@ -227,7 +227,7 @@
         if (highlightItem) setEditingItem(highlightItem);
       }, [highlightItem]);
 
-      // 🚨 안전 장치가 포함된 서열 정리 로직
+      // 🚨 절대 정렬 알고리즘 (오름차순)
       const sortedFolders = useMemo(() => {
         const valid = rawList.filter(i => i.deceased_name && String(i.deceased_name).trim() !== '' && i.deceased_name !== '.');
 
@@ -291,7 +291,6 @@
                   });
 
                   return (
-                    // 🚨 기본 상태 접힘. 열고 닫을때 성능 병목 없음.
                     <details key={folderInfo.cNo} className="bg-[#111] rounded-xl overflow-hidden border border-[#222] shadow-lg group">
                       <summary className="bg-[#1a1a1a] hover:bg-[#222] px-5 py-4 flex justify-between items-center transition-colors">
                         <div className="flex items-center gap-3">
@@ -359,7 +358,7 @@
         const dayItems = rawList.filter(i => i.scheduled_date === dateStr);
         days.push(
           <div key={d} className={`calendar-day border border-[#333] ${new Date().toISOString().startsWith(dateStr) ? 'today' : ''}`}>
-            <div className="text-xs font-bold text-gray-500 mb-2">{d}</div>
+            <div className="text-xs font-bold text-gray-500 mb-1">{d}</div>
             <div className="flex flex-col gap-1 overflow-y-auto max-h-[85px] pr-1">
               {dayItems.map(i => {
                 const statusName = getEngPriority(i.status) === 0 ? '접수' : getEngPriority(i.status) === 1 ? '디자인' : getEngPriority(i.status) === 2 ? '각인' : '설치';
@@ -389,7 +388,7 @@
       );
     }
 
-    // [3. 통합 일정 (오늘의 요약 포함)]
+    // [3. 통합 일정 (팝업 아코디언 추가)]
     function CalendarView() {
       const [events, setEvents] = useState([]);
       const [loading, setLoading] = useState(true);
@@ -400,9 +399,7 @@
       useEffect(() => {
         async function fetchAll() {
           try {
-            // 통합일정은 각인DB의 '안치일정'과 프로젝트 등에서 가져옵니다.
             const { data: engs } = await supabase.from('engravings').select('*');
-            
             let merged = [];
             if (engs) {
               merged = [...merged, ...engs.filter(i=>i.scheduled_date).map(i => ({ 
@@ -414,7 +411,7 @@
             }
             setEvents(merged);
           } catch (error) {
-            console.log("통합일정 데이터 로드 에러", error);
+            console.log("통합일정 데이터 에러", error);
           }
           setLoading(false);
         }
@@ -426,7 +423,7 @@
       const todayStr = new Date().toISOString().split('T')[0];
       const todayInterments = events.filter(e => e.date === todayStr && e.type === '안치').length;
       const todayVisits = events.filter(e => e.date === todayStr && e.type === '답사').length;
-      const todayLeaves = 0; // 근태 테이블 생기면 연동
+      const todayLeaves = 0; 
 
       const days = [];
       const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
@@ -454,7 +451,6 @@
 
       return (
         <div className="h-full flex flex-col gap-4">
-          {/* 오늘의 요약 대시보드 */}
           <div className="bg-[#111] p-4 rounded-2xl border border-[#222] flex gap-6">
             <div className="flex flex-col"><span className="text-xs text-gray-500 font-bold uppercase tracking-widest">오늘 안치</span><span className="text-xl font-black text-green-400">{todayInterments}건</span></div>
             <div className="w-px bg-[#333]"></div>
@@ -475,6 +471,7 @@
             <div className="grid grid-cols-7 text-center text-[11px] py-3 bg-[#000] text-gray-600 font-bold border-b border-[#222] tracking-widest">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=> <div key={d}>{d}</div>)}</div>
             <div className="calendar-grid flex-1 overflow-y-auto">{days}</div>
 
+            {/* 🚨 통합일정 팝업 - 세부사항 아코디언 적용 */}
             {isModalOpen && (
               <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" onClick={() => setIsModalOpen(false)}>
                 <div className="bg-[#1a1a1a] border border-[#333] rounded-[2.5rem] w-full max-w-md p-10 shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -509,7 +506,7 @@
       );
     }
 
-    // [4. 현장 마스터 - 정보 팝업 풀스펙 (계약번호 등 복구)]
+    // [4. 현장 마스터 - 정보 팝업 (계약번호, 기수, 분양가, 관리비 등)]
     function FieldMaster({ highlightId }) {
       const [locations, setLocations] = useState([]); const [sections, setSections] = useState([]); const [activeSection, setActiveSection] = useState(''); const [loading, setLoading] = useState(true);
       const [isModalOpen, setIsModalOpen] = useState(false); const [selectedSlot, setSelectedSlot] = useState(null);
@@ -575,7 +572,7 @@
           </div>
           <div className="flex-1 overflow-auto p-8 bg-[#000]"><div className="w-max pb-32">{rows}</div></div>
           
-          {/* 🚨 현장 마스터 전용 모달 (계약번호, 기수, 분양가 등 풀스펙) */}
+          {/* 🚨 현장 마스터 전용 모달 (계약번호, 기수, 분양가, 관리비 등) */}
           {isModalOpen && selectedSlot && (
             <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" onClick={() => setIsModalOpen(false)}>
               <div className="bg-[#1a1a1a] border border-[#333] rounded-[2.5rem] w-full max-w-2xl p-10 shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -596,4 +593,96 @@
                   <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">고인명</label><input name="deceased_name" value={selectedSlot.deceased_name || ''} onChange={handlePopupChange} className="jake-input text-white" /></div>
                   
                   <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">계약번호</label><input name="contract_no" value={selectedSlot.contract_no || ''} onChange={handlePopupChange} className="jake-input" /></div>
-                  <div className="space-y
+                  <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">계약자명</label><input name="contractor" value={selectedSlot.contractor || ''} onChange={handlePopupChange} className="jake-input" /></div>
+                  
+                  <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">기수 (Capacity)</label><input name="capacity" value={selectedSlot.capacity || ''} onChange={handlePopupChange} className="jake-input" /></div>
+                  <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">분양가 (Price)</label><input name="price" type="number" value={selectedSlot.price || ''} onChange={handlePopupChange} className="jake-input" /></div>
+                  
+                  <div className="space-y-1 col-span-1 md:col-span-2"><label className="text-[10px] font-black text-gray-500 uppercase">관리비 (Maintenance Fee)</label><input name="maintenance_fee" type="number" value={selectedSlot.maintenance_fee || ''} onChange={handlePopupChange} className="jake-input" /></div>
+                  
+                  <div className="space-y-1 col-span-1 md:col-span-2"><label className="text-[10px] font-black text-gray-500 uppercase">특이사항 메모</label>
+                    <textarea name="memo" value={selectedSlot.memo || ''} onChange={handlePopupChange} className="jake-input h-20" />
+                  </div>
+                </div>
+                <button onClick={handlePopupSave} className="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl font-black text-white mt-8 transition-colors shadow-xl">정보 저장하기</button>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // [5. 프로젝트 칸반]
+    function KanbanBoard() {
+      const [projects, setProjects] = useState([]); const [loading, setLoading] = useState(true);
+      useEffect(() => { async function fetch() { const { data } = await supabase.from('projects').select('*').order('start_date', { ascending: false }); setProjects(data || []); setLoading(false); } fetch(); }, []);
+      if (loading) return <div className="p-10 text-center animate-pulse font-black uppercase text-blue-500 tracking-widest">Loading Projects...</div>;
+      const cols = [{ id: '준비', title: '📝 준비', c: 'border-gray-600' },{ id: '진행중', title: '🚀 진행중', c: 'border-blue-600' },{ id: '보류', title: '⏸️ 보류', c: 'border-orange-600' },{ id: '완료', title: '✅ 완료', c: 'border-green-800' }];
+      return (
+        <div className="flex gap-6 overflow-x-auto h-full pb-10 items-start">
+          {cols.map(col => (
+            <div key={col.id} className="w-80 flex flex-col h-full glass-panel rounded-[2rem] p-6 shrink-0 bg-[#0f0f0f] border border-[#222]">
+              <div className={`text-base font-black mb-6 border-b-2 pb-3 ${col.c} text-gray-300 flex justify-between uppercase tracking-widest`}><span>{col.title}</span><span className="text-xs bg-[#000] px-3 py-1 rounded-xl border border-[#333]">{projects.filter(p=>p.status===col.id).length}</span></div>
+              <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+                {projects.filter(p => p.status === col.id).map(p => (
+                  <div key={p.id} className="bg-[#181818] p-5 rounded-2xl border border-[#2a2a2a] shadow-lg hover:border-blue-500/50 transition-all border-l-4 border-l-gray-600 cursor-pointer">
+                    <div className="text-[10px] text-gray-500 mb-2 font-mono font-bold">{p.id}</div>
+                    <div className="font-black text-base text-gray-100 leading-snug">{p.title}</div>
+                    <div className="flex justify-between mt-5 text-[11px] text-gray-500 font-black uppercase tracking-widest"><span><i className="ph ph-user mr-1"></i>{p.personnel || '미정'}</span><span><i className="ph ph-clock mr-1"></i>{p.end_date || '-'}</span></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // [6. 메인 앱 라우터]
+    function App() {
+      const [currentTab, setCurrentTab] = useState('engraving'); 
+      const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
+      const [highlightId, setHighlightId] = useState(null); 
+      const [highlightEngraving, setHighlightEngraving] = useState(null); 
+
+      const navItems = [{ id: 'field', icon: 'ph-map-trifold', label: '현장 마스터' }, { id: 'calendar', icon: 'ph-calendar-check', label: '통합 일정' }, { id: 'engraving', icon: 'ph-hammer', label: '각인 관리' }, { id: 'project', icon: 'ph-kanban', label: 'Work 프로젝트' }];
+      
+      const handleSearchResult = (res) => {
+        if (currentTab === 'engraving') {
+          setHighlightEngraving(res); 
+        } else {
+          setCurrentTab('field'); 
+          setHighlightId(res.id); 
+          setTimeout(() => setHighlightId(null), 3000);
+        }
+      };
+
+      return (
+        <div className="flex h-screen bg-[#050505] overflow-hidden text-gray-400 font-sans selection:bg-blue-500/30">
+          <aside className={`fixed md:static inset-y-0 left-0 z-[1500] w-72 bg-[#0a0a0a] border-r border-[#1a1a1a] transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 flex flex-col shadow-2xl`}>
+            <div className="p-10 border-b border-[#1a1a1a] flex justify-between items-center"><h1 className="text-3xl font-black text-white tracking-tighter uppercase">Jake<span className="text-blue-500">OS</span></h1></div>
+            <nav className="flex-1 p-6 space-y-3 overflow-y-auto">
+              <div className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-6 ml-3">System Modules</div>
+              {navItems.map(item => (<button key={item.id} onClick={() => { setCurrentTab(item.id); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-4 px-6 py-5 rounded-3xl text-sm font-black transition-all ${currentTab === item.id ? 'bg-blue-600 text-white shadow-[0_10px_30px_rgba(37,99,235,0.3)]' : 'text-gray-500 hover:bg-[#111]'}`}><i className={`ph ${item.icon} text-2xl`}></i> {item.label}</button>))}
+            </nav>
+          </aside>
+          <main className="flex-1 flex flex-col min-w-0 overflow-visible relative">
+            <header className="flex items-center justify-between p-6 bg-[#0a0a0a] border-b border-[#1a1a1a] gap-6 z-[1600] overflow-visible">
+              <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-3 text-gray-500"><i className="ph ph-list text-3xl" /></button>
+              <GlobalSearch onSelectResult={handleSearchResult} currentTab={currentTab} />
+              <div className="hidden md:flex items-center gap-4"><div className="text-right leading-none"><div className="text-[10px] font-black text-white uppercase mb-1.5 tracking-widest">Master Admin</div><div className="text-[9px] text-green-500 font-bold uppercase tracking-widest">System Active</div></div><div className="h-12 w-12 rounded-[1.25rem] bg-[#111] border border-[#222] flex items-center justify-center font-black text-blue-500 text-xl shadow-inner">J</div></div>
+            </header>
+            <div className="flex-1 p-6 md:p-10 overflow-hidden relative">
+              {currentTab === 'field' && <FieldMaster highlightId={highlightId} />}
+              {currentTab === 'calendar' && <CalendarView />}
+              {currentTab === 'engraving' && <EngravingView highlightItem={highlightEngraving} />}
+              {currentTab === 'project' && <KanbanBoard />}
+            </div>
+          </main>
+        </div>
+      );
+    }
+    const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<App />);
+  </script>
+</body>
+</html>
