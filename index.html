@@ -19,13 +19,8 @@
     .status-미분양 { background-color: #f3f4f6; color: #111; border-color: #d1d5db; }
     .status-예약 { background-color: #facc15; color: #422006; border-color: #ca8a04; }
     .status-계약금 { background-color: #f97316; color: #fff; border-color: #ea580c; }
-    .status-홀딩 { background-color: #7c2d12; color: #ffedd5; border-color: #9a3412; }
     .status-안치 { background-color: #14532d; color: #dcfce7; border-color: #166534; }
-    .row-container { display: flex; flex-direction: row; gap: 4px; margin-bottom: 8px; width: max-content; }
     .slot { width: 82px; min-width: 82px; height: 68px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-radius: 6px; font-size: 0.75rem; text-align: center; border: 1px solid transparent; cursor: pointer; }
-    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background-color: #2a2a2a; }
-    .calendar-day { background-color: #111; min-height: 100px; padding: 6px; cursor: pointer; }
-    .calendar-day.today { background-color: #1a1e1a; border: 2px solid #facc15; }
     .jake-input { width: 100%; background-color: #000; color: #e2e8f0; border: 1px solid #333; border-radius: 0.75rem; padding: 0.75rem; outline: none; }
   </style>
 </head>
@@ -37,29 +32,30 @@
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxY2N4bmNpaWFqd3FkbXB3amR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MjA3MTMsImV4cCI6MjA4NzA5NjcxM30.L23-eq-DIPsbONOeX-xQ8UcMb7gtgTTTRpkaSm9HTw4';
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // [통합 검색]
+    // [검색 엔진 - 특수문자 대응]
     function GlobalSearch({ onSelectResult }) {
       const [query, setQuery] = useState('');
       const [results, setResults] = useState([]);
       useEffect(() => {
-        if (query.length < 2) { setResults([]); return; }
+        if (!query.trim() || query.length < 2) { setResults([]); return; }
         const timer = setTimeout(async () => {
-          const { data } = await supabase.from('master_locations').select('*').or(`deceased_name.ilike.%${query}%,contractor.ilike.%${query}%`).limit(8);
+          // SQL Injection 및 특수문자 오인 방지를 위한 ilike 검색
+          const { data } = await supabase.from('master_locations').select('*')
+            .or(`deceased_name.ilike.%${query}%,contractor.ilike.%${query}%`)
+            .limit(10);
           setResults(data || []);
         }, 300);
         return () => clearTimeout(timer);
       }, [query]);
       return (
         <div className="relative w-full max-w-md z-[1000]">
-          <div className="relative"><i className="ph ph-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-gray-500"></i>
-            <input type="text" placeholder="고인명 또는 계약자 검색..." className="jake-input pl-11 shadow-2xl" value={query} onChange={(e) => setQuery(e.target.value)} />
-          </div>
+          <input type="text" placeholder="고인명/계약자 검색..." className="jake-input pl-4 shadow-2xl" value={query} onChange={(e) => setQuery(e.target.value)} />
           {results.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-3 glass-panel rounded-2xl shadow-2xl z-[1100] p-2 border border-[#444]">
+            <div className="absolute top-full left-0 right-0 mt-2 glass-panel rounded-xl shadow-2xl z-[1100] p-1 border border-[#444] overflow-hidden">
               {results.map(res => (
-                <div key={res.id} onClick={() => { onSelectResult(res); setQuery(''); setResults([]); }} className="p-4 hover:bg-blue-600/20 rounded-xl cursor-pointer transition-all">
+                <div key={res.id} onClick={() => { onSelectResult(res); setQuery(''); setResults([]); }} className="p-3 hover:bg-blue-600/30 rounded-lg cursor-pointer border-b border-[#333] last:border-0 transition-all">
                   <div className="text-[10px] text-blue-400 font-bold">{res.section} {res.slot_no}</div>
-                  <div className="font-bold text-gray-100">{res.deceased_name || '(공란)'} <span className="text-xs font-normal text-gray-500 ml-2">| {res.contractor}</span></div>
+                  <div className="font-bold text-gray-200">{res.deceased_name || '(공란)'} <span className="text-xs font-normal text-gray-500 ml-1">| {res.contractor}</span></div>
                 </div>
               ))}
             </div>
@@ -68,27 +64,30 @@
       );
     }
 
-    // [각인 관리 - 방어적 정렬 및 폴더화]
+    // [각인 관리 - 줄노트 현상 원천 차단]
     function EngravingView() {
       const [groupedData, setGroupedData] = useState({});
       const [loading, setLoading] = useState(true);
 
       useEffect(() => {
         async function fetchEngravings() {
-          const { data, error } = await supabase.from('engravings').select('*');
-          if (data) {
-            // 🚨 필터 완화: 고인명이 없어도 일단 다 가져와서 확인
-            const valid = data.filter(i => i.location && i.location !== '.');
+          try {
+            const { data, error } = await supabase.from('engravings').select('*');
+            if (error) throw error;
+            console.log("Fetched Engravings Data:", data); // F12 확인용
 
-            // 정렬: 미완료 우선 + 날짜 미래순
+            // 1. 유효 데이터 필터링 (최소한의 정보가 있는 건만)
+            const valid = (data || []).filter(i => i.deceased_name && i.deceased_name !== '.' && i.deceased_name.trim() !== '');
+
+            // 2. 정렬 로직 (미완료 우선 -> 날짜순)
             valid.sort((a, b) => {
-              const statusA = (a.status === '완료' || a.status === '설치완료') ? 1 : 0;
-              const statusB = (b.status === '완료' || b.status === '설치완료') ? 1 : 0;
-              if (statusA !== statusB) return statusA - statusB;
+              const isDoneA = (a.status === '완료' || a.status === '설치완료') ? 1 : 0;
+              const isDoneB = (b.status === '완료' || b.status === '설치완료') ? 1 : 0;
+              if (isDoneA !== isDoneB) return isDoneA - isDoneB;
               return new Date(b.scheduled_date || 0) - new Date(a.scheduled_date || 0);
             });
 
-            // 그룹화
+            // 3. 그룹화
             const groups = valid.reduce((acc, item) => {
               const key = (item.contract_no && item.contract_no !== '.') ? item.contract_no : `P-${item.id}`;
               if (!acc[key]) acc[key] = [];
@@ -96,91 +95,50 @@
               return acc;
             }, {});
             setGroupedData(groups);
-          }
-          setLoading(false);
+          } catch (e) { console.error("Engraving View Error:", e); }
+          finally { setLoading(false); }
         }
         fetchEngravings();
       }, []);
 
-      if (loading) return <div className="p-10 text-center text-gray-500 animate-pulse font-black uppercase">Data Syncing...</div>;
+      if (loading) return <div className="p-10 text-center animate-pulse">각인 데이터 로딩 중...</div>;
 
       return (
-        <div className="h-full flex flex-col space-y-4 overflow-y-auto pb-40 pr-2">
-          {Object.entries(groupedData).map(([cNo, items]) => (
-            <div key={cNo} className="glass-panel rounded-2xl overflow-hidden shadow-xl border border-[#333]">
+        <div className="h-full flex flex-col space-y-6 overflow-y-auto pb-40 pr-2">
+          {Object.entries(groupedData).map(([key, items]) => (
+            <div key={key} className="glass-panel rounded-2xl overflow-hidden shadow-lg border border-[#333]">
               <div className="bg-[#1a1a1a] p-4 flex justify-between items-center border-b border-[#333]">
-                <div className="flex items-center gap-3"><i className="ph ph-folder-open text-blue-500 text-xl"></i><span className="font-black text-white text-sm tracking-tighter">Group: {cNo.startsWith('P-') ? '개별접수' : cNo}</span></div>
-                <span className="text-[10px] bg-blue-900/40 text-blue-300 px-2 py-1 rounded font-bold uppercase">Items {items.length}</span>
+                <div className="flex items-center gap-2"><i className="ph ph-folder text-blue-500"></i><span className="font-bold text-white text-sm">계약그룹: {key.startsWith('P-') ? '개별접수' : key}</span></div>
+                <span className="text-[10px] text-gray-500 font-bold uppercase">{items.length} 건</span>
               </div>
-              <div className="divide-y divide-[#2a2a2a]">
-                {items.map(i => (
-                  <div key={i.id} className="p-5 flex justify-between items-center bg-[#0a0a0a] hover:bg-[#111] transition-all">
-                    <div className="space-y-1">
-                      <div className="text-[10px] text-blue-500 font-black uppercase tracking-tighter">{String(i.location || '위치없음')}</div>
-                      <div className="text-base font-bold text-gray-100">{String(i.deceased_name || '이름미상')} <span className="text-xs font-normal text-gray-500 ml-2">계약: {String(i.contractor || '정보없음')}</span></div>
-                      <div className="text-[11px] text-gray-600">{String(i.size_spec || '-')} | {String(i.religion || '-')}</div>
+              <div className="flex flex-col">
+                {items.map(item => (
+                  <div key={item.id} className="p-5 flex justify-between items-center border-b border-[#222] last:border-0 bg-[#0a0a0a]">
+                    <div className="min-w-0 flex-1 pr-4">
+                      <div className="text-[10px] text-blue-500 font-bold uppercase">{item.location || '위치정보없음'}</div>
+                      <div className="text-base font-bold text-gray-100">{item.deceased_name || '이름없음'} <span className="text-xs font-normal text-gray-500 ml-1">({item.contractor || '-'})</span></div>
+                      <div className="text-[11px] text-gray-600 truncate">{item.size_spec || '-'} | {item.religion || '-'}</div>
                     </div>
-                    <div className="text-right">
-                      <div className={`text-[10px] px-3 py-1.5 rounded-lg font-black mb-2 inline-block ${i.status === '완료' || i.status === '설치완료' ? 'bg-[#222] text-gray-600' : 'bg-green-900/40 text-green-400 border border-green-800/50'}`}>{i.status || '접수'}</div>
-                      <div className="text-[10px] text-gray-500 font-mono font-bold">{i.scheduled_date || '날짜미정'}</div>
+                    <div className="text-right shrink-0">
+                      <div className={`text-[10px] px-2 py-1 rounded font-bold mb-2 inline-block ${item.status === '완료' || item.status === '설치완료' ? 'bg-[#222] text-gray-600' : 'bg-green-900/40 text-green-400 border border-green-800/50'}`}>
+                        {item.status || '접수'}
+                      </div>
+                      <div className="text-[10px] text-gray-500 font-mono block">{item.scheduled_date || '날짜미정'}</div>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
           ))}
+          {Object.keys(groupedData).length === 0 && <div className="text-center py-20 text-gray-600">불러올 각인 데이터가 없습니다.</div>}
         </div>
       );
     }
 
-    // [3. 통합 일정]
-    function CalendarView() {
-      const [events, setEvents] = useState([]);
-      const [currentDate, setCurrentDate] = useState(new Date());
-      const [selectedDate, setSelectedDate] = useState(null);
-      const [isModalOpen, setIsModalOpen] = useState(false);
-      useEffect(() => {
-        async function fetchAll() {
-          const [inter, pipe] = await Promise.all([supabase.from('interments').select('*'), supabase.from('sales_pipeline').select('*')]);
-          const merged = [...(inter.data || []).map(i => ({ date: i.scheduled_date, title: i.deceased_name, type: '안치', detail: i })), ...(pipe.data || []).map(p => ({ date: p.visit_date, title: p.customer_name, type: '답사', detail: p }))].filter(e => e.date);
-          setEvents(merged);
-        }
-        fetchAll();
-      }, []);
-      const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
-      const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
-      const renderDays = () => {
-        let days = []; for (let i = 0; i < firstDay; i++) days.push(<div key={`e-${i}`} className="calendar-day opacity-5"></div>);
-        for (let d = 1; d <= daysInMonth; d++) {
-          const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-          const dayEvents = events.filter(e => e.date === dateStr);
-          days.push(<div key={d} className={`calendar-day ${new Date().toISOString().startsWith(dateStr) ? 'today' : ''}`} onClick={() => { setSelectedDate(dateStr); setIsModalOpen(true); }}>
-              <div className="text-xs font-bold text-gray-600 mb-1">{d}</div>
-              <div className="space-y-1">{dayEvents.map((e, idx) => (<div key={idx} className={`text-[9px] p-1 rounded truncate border ${e.type === '안치' ? 'bg-green-900/30 text-green-300 border-green-800' : 'bg-yellow-900/30 text-yellow-300 border-yellow-800'}`}>{e.type[0]} {e.title}</div>))}</div>
-            </div>);
-        } return days;
-      };
-      const selectedDayEvents = events.filter(e => e.date === selectedDate);
-      return (<div className="h-full glass-panel rounded-2xl overflow-hidden flex flex-col">
-          <div className="p-5 flex justify-between items-center bg-[#161616] border-b border-[#222]"><h2 className="text-lg font-black text-white">{currentDate.getFullYear()}년 {currentDate.getMonth() + 1}월</h2>
-            <div className="flex gap-4"><button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))}><i className="ph ph-arrow-left text-xl text-gray-500 hover:text-white"></i></button><button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))}><i className="ph ph-arrow-right text-xl text-gray-500 hover:text-white"></i></button></div>
-          </div>
-          <div className="grid grid-cols-7 text-center text-[10px] py-3 bg-[#0a0a0a] text-gray-600 font-bold uppercase tracking-widest border-b border-[#222]">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => <div key={d}>{d}</div>)}</div>
-          <div className="calendar-grid flex-1 overflow-y-auto">{renderDays()}</div>
-          {isModalOpen && (<div className="fixed inset-0 bg-black/80 z-[2000] flex items-center justify-center p-4" onClick={() => setIsModalOpen(false)}>
-              <div className="bg-[#1a1a1a] border border-[#333] rounded-3xl w-full max-w-sm p-8 shadow-2xl" onClick={e => e.stopPropagation()}>
-                <div className="flex justify-between items-start mb-6"><div><h3 className="text-2xl font-black text-white">{selectedDate?.split('-')[2]}일 일정</h3><p className="text-xs text-gray-500">{selectedDate}</p></div><button onClick={() => setIsModalOpen(false)}><i className="ph ph-x text-3xl text-gray-500" /></button></div>
-                <div className="space-y-4 max-h-80 overflow-y-auto pr-2">{selectedDayEvents.length === 0 ? <p className="text-gray-600 text-center py-10 font-bold">등록된 일정이 없습니다.</p> : selectedDayEvents.map((e, i) => (<div key={i} className={`p-5 rounded-2xl border ${e.type === '안치' ? 'bg-green-900/20 border-green-800' : 'bg-yellow-900/20 border-yellow-800'}`}><span className={`text-[10px] font-black px-2 py-0.5 rounded mb-2 inline-block ${e.type === '안치' ? 'bg-green-700 text-white' : 'bg-yellow-600 text-black'}`}>{e.type}</span><div className="text-lg font-black text-white">{e.title}</div><div className="text-xs text-gray-500 mt-2 leading-relaxed">{e.detail.memo || '세부 메모 없음'}</div></div>))}</div>
-                <button onClick={() => setIsModalOpen(false)} className="w-full mt-8 bg-blue-600 py-4 rounded-2xl font-black text-white hover:bg-blue-500 transition-all">닫기</button>
-              </div>
-            </div>)}
-        </div>);
-    }
-
-    // [4. 현장 마스터]
+    // [현장 마스터]
     function FieldMaster({ highlightId }) {
       const [locations, setLocations] = useState([]); const [sections, setSections] = useState([]); const [activeSection, setActiveSection] = useState(''); const [loading, setLoading] = useState(true);
-      const [isModalOpen, setIsModalOpen] = useState(false); const [selectedSlot, setSelectedSlot] = useState(null); const [editForm, setEditForm] = useState({}); const [isSaving, setIsSaving] = useState(false);
+      const [isModalOpen, setIsModalOpen] = useState(false); const [selectedSlot, setSelectedSlot] = useState(null); const [editForm, setEditForm] = useState({});
       const rowConfig = { 'A2/가':[12], 'A3/가':[8,8], 'A4/가':[12,12,12,12,18,18,28,12], 'A4/나':[9,11,7,8,8], 'A4/다':[6,6], 'A5/가':[13,14,14,13,13,15,11], 'A5/나':[23,22,26,25,30,47,47,30,39], 'A6/가':[27,27,22,18,19,15,13], 'A6/나':[25,26,26,26,26,26], 'C1/가':[13,17,21,25], 'B1/가':[20,23], 'B2/가':[34,34,35,34,34], 'B3/가':[48,46,45,41], 'B4/가':[37,38,41,41,34], 'B5/가':[47,47,49,48,40,32], 'B6/가/1-12':[47,52,53,52,53,53,54,54,54,53,55,54,50], 'B6/가/13-14':[75,75,75,75,75,75,75,75,75] };
       useEffect(() => {
         async function fetch() {
@@ -195,62 +153,43 @@
         } fetch();
       }, []);
       useEffect(() => { if (highlightId) { const item = locations.find(l => l.id === highlightId); if (item) { setActiveSection(item.section); setSelectedSlot(item); setEditForm({...item}); setIsModalOpen(true); } } }, [highlightId, locations]);
-      const handleSave = async () => { setIsSaving(true); await supabase.from('master_locations').update({ status: editForm.status, contractor: editForm.contractor, deceased_name: editForm.deceased_name, memo: editForm.memo }).eq('id', selectedSlot.id); setLocations(prev => prev.map(l => l.id === selectedSlot.id ? { ...l, ...editForm } : l)); setIsModalOpen(false); setIsSaving(false); };
-      if (loading) return <div className="p-10 text-center text-gray-700 animate-pulse font-black uppercase">Syncing Map...</div>;
+      if (loading) return <div className="p-10 text-center animate-pulse">현장 지도 로딩 중...</div>;
       const currentData = locations.filter(l => l.section === activeSection);
-      const layout = rowConfig[activeSection] || [20]; let currentIndex = 0; const rows = [];
+      const layout = rowConfig[activeSection] || [20]; let curIdx = 0; const rows = [];
       layout.forEach((count, rIdx) => {
-        if (currentIndex >= currentData.length) return; const rowData = currentData.slice(currentIndex, currentIndex + count);
-        rows.push(<div key={rIdx} className="row-container">{rowData.map(item => item.id.includes('SPACER') ? <div key={item.id} className="slot slot-spacer" /> : (<div key={item.id} className={`slot status-${item.status || '미분양'} ${highlightId === item.id ? 'ring-4 ring-blue-500 scale-105 z-10' : ''}`} onClick={() => { setSelectedSlot(item); setEditForm({...item}); setIsModalOpen(true); }}><div className="font-mono text-[9px] opacity-60 mb-0.5 font-bold">{item.slot_no}</div><div className="deceased-name truncate w-full px-1 font-black">{item.deceased_name || ''}</div></div>))}</div>); currentIndex += count;
+        if (curIdx >= currentData.length) return; const rowData = currentData.slice(curIdx, curIdx + count);
+        rows.push(<div key={rIdx} className="row-container">{rowData.map(i => i.id.includes('SPACER') ? <div key={i.id} className="slot opacity-0" /> : (<div key={i.id} className={`slot status-${i.status || '미분양'} ${highlightId === i.id ? 'ring-4 ring-blue-500 scale-105 z-10' : ''}`} onClick={() => { setSelectedSlot(i); setEditForm({...i}); setIsModalOpen(true); }}><div className="font-mono text-[9px] opacity-60 font-bold">{i.slot_no}</div><div className="truncate w-full px-1 font-black">{i.deceased_name || ''}</div></div>))}</div>); curIdx += count;
       });
-      return (<div className="flex flex-col h-full glass-panel rounded-3xl overflow-hidden border border-[#222]">
-          <div className="flex overflow-x-auto bg-[#161616] p-4 gap-2 border-b border-[#2a2a2a] shrink-0">{sections.map(s => <button key={s} onClick={() => setActiveSection(s)} className={`px-5 py-2.5 rounded-xl text-xs font-black whitespace-nowrap transition-all ${activeSection === s ? 'bg-blue-600 text-white shadow-xl' : 'text-gray-500 hover:text-gray-300'}`}>{s}</button>)}</div>
+      return (<div className="flex flex-col h-full glass-panel rounded-3xl overflow-hidden">
+          <div className="flex overflow-x-auto bg-[#161616] p-4 gap-2 border-b border-[#2a2a2a] shrink-0">{sections.map(s => <button key={s} onClick={() => setActiveSection(s)} className={`px-5 py-2 rounded-xl text-xs font-bold whitespace-nowrap ${activeSection === s ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-300'}`}>{s}</button>)}</div>
           <div className="flex-1 overflow-auto p-8 bg-[#000]"><div className="w-max pb-32">{rows}</div></div>
-          {isModalOpen && (<div className="fixed inset-0 bg-black/80 z-[2000] flex items-center justify-center p-4" onClick={() => setIsModalOpen(false)}><div className="bg-[#1a1a1a] border border-[#333] rounded-[2.5rem] w-full max-w-md p-10 space-y-8" onClick={e => e.stopPropagation()}><div className="flex justify-between items-start"><div><h3 className="text-2xl font-black text-white">정보 업데이트</h3><p className="text-sm text-blue-500 font-mono uppercase tracking-tighter mt-1">{selectedSlot.section} {selectedSlot.slot_no}</p></div><button onClick={() => setIsModalOpen(false)}><i className="ph ph-x text-4xl text-gray-500" /></button></div><div className="space-y-5">
-                  <div className="space-y-1"><label className="text-[10px] font-black text-gray-600 uppercase ml-2">상태 구분</label><select value={editForm.status} onChange={e => setEditForm({...editForm, status:e.target.value})} className="jake-input cursor-pointer"><option value="미분양">미분양</option><option value="예약">예약</option><option value="계약금">계약금</option><option value="홀딩">홀딩</option><option value="안치">안치</option></select></div>
-                  <div className="space-y-1"><label className="text-[10px] font-black text-gray-600 uppercase ml-2">계약자명</label><input type="text" value={editForm.contractor || ''} onChange={e => setEditForm({...editForm, contractor:e.target.value})} className="jake-input" /></div>
-                  <div className="space-y-1"><label className="text-[10px] font-black text-gray-600 uppercase ml-2">고인명</label><input type="text" value={editForm.deceased_name || ''} onChange={e => setEditForm({...editForm, deceased_name:e.target.value})} className="jake-input" /></div>
-                  <div className="space-y-1"><label className="text-[10px] font-black text-gray-600 uppercase ml-2">특이사항</label><textarea value={editForm.memo || ''} onChange={e => setEditForm({...editForm, memo:e.target.value})} className="jake-input h-32 resize-none" /></div>
-                </div><button onClick={handleSave} disabled={isSaving} className="w-full bg-blue-600 hover:bg-blue-500 py-6 rounded-3xl font-black text-white transition-all shadow-xl active:scale-95 text-lg">{isSaving ? 'Saving...' : '데이터 저장'}</button></div></div>)}
+          {isModalOpen && (<div className="fixed inset-0 bg-black/80 z-[2000] flex items-center justify-center p-4" onClick={() => setIsModalOpen(false)}><div className="bg-[#1a1a1a] border border-[#333] rounded-[2.5rem] w-full max-w-md p-10" onClick={e => e.stopPropagation()}><h3 className="text-xl font-bold mb-6 text-white">정보 업데이트</h3>
+          <div className="space-y-4"><input type="text" value={editForm.deceased_name || ''} onChange={e => setEditForm({...editForm, deceased_name: e.target.value})} className="jake-input" placeholder="고인명" /><textarea value={editForm.memo || ''} onChange={e => setEditForm({...editForm, memo: e.target.value})} className="jake-input h-32" placeholder="메모" /></div>
+          <button onClick={async () => { await supabase.from('master_locations').update({ deceased_name: editForm.deceased_name, memo: editForm.memo }).eq('id', selectedSlot.id); window.location.reload(); }} className="w-full bg-blue-600 py-5 rounded-2xl font-bold text-white mt-6">저장하기</button></div></div>)}
         </div>);
     }
 
-    // [5. 프로젝트 칸반]
-    function KanbanBoard() {
-      const [projects, setProjects] = useState([]); const [loading, setLoading] = useState(true);
-      useEffect(() => { async function fetch() { const { data } = await supabase.from('projects').select('*').order('start_date', { ascending: false }); setProjects(data || []); setLoading(false); } fetch(); }, []);
-      if (loading) return <div className="p-10 text-center text-gray-500 animate-pulse font-black uppercase">Loading Projects...</div>;
-      const cols = [{ id: '준비', title: '📝 준비', c: 'border-gray-600' },{ id: '진행중', title: '🚀 진행중', c: 'border-blue-600' },{ id: '보류', title: '⏸️ 보류', c: 'border-orange-600' },{ id: '완료', title: '✅ 완료', c: 'border-green-800' }];
-      return (<div className="flex gap-6 overflow-x-auto h-full pb-10 items-start">{cols.map(col => (<div key={col.id} className="w-72 flex flex-col h-full glass-panel rounded-3xl p-4 shrink-0 bg-[#0f0f0f] border border-[#222]">
-              <div className={`text-sm font-black mb-5 border-b-2 pb-2 ${col.c} text-gray-300 flex justify-between uppercase tracking-widest`}><span>{col.title}</span><span className="text-[10px] bg-[#000] px-2 py-0.5 rounded-full border border-[#333]">{projects.filter(p=>p.status===col.id).length}</span></div>
-              <div className="flex-1 overflow-y-auto space-y-4 pr-1">{projects.filter(p => p.status === col.id).map(p => (<div key={p.id} className="bg-[#181818] p-5 rounded-2xl border border-[#222] shadow-sm hover:border-blue-500/50 transition-all border-l-4 border-l-gray-600"><div className="text-[9px] text-gray-600 mb-2 font-mono font-bold">{p.id}</div><div className="font-black text-sm text-gray-200 leading-tight">{p.title}</div><div className="flex justify-between mt-4 text-[10px] text-gray-500 font-bold uppercase"><span>{p.personnel}</span><span>{p.end_date}</span></div></div>))}</div>
-            </div>))}</div>);
-    }
-
-    // [6. 메인 앱]
+    // [메인 앱]
     function App() {
       const [currentTab, setCurrentTab] = useState('field'); const [isSidebarOpen, setIsSidebarOpen] = useState(false); const [highlightId, setHighlightId] = useState(null);
       const navItems = [{ id: 'field', icon: 'ph-map-trifold', label: '현장 마스터' }, { id: 'project', icon: 'ph-kanban', label: 'Work 프로젝트' }, { id: 'calendar', icon: 'ph-calendar-check', label: '통합 일정' }, { id: 'engraving', icon: 'ph-hammer', label: '각인 관리' }];
-      const handleSearchResult = (result) => { setCurrentTab('field'); setHighlightId(result.id); setTimeout(() => setHighlightId(null), 3000); };
       return (<div className="flex h-screen bg-[#050505] overflow-hidden text-gray-400">
           <aside className={`fixed md:static inset-y-0 left-0 z-[1500] w-72 glass-panel border-r border-[#1a1a1a] transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 flex flex-col`}>
             <div className="p-10 border-b border-[#1a1a1a] flex justify-between items-center"><h1 className="text-2xl font-black text-white tracking-tighter">Jake<span className="text-blue-500">OS</span></h1></div>
             <nav className="flex-1 p-6 space-y-3 overflow-y-auto">
-              {navItems.map(item => (<button key={item.id} onClick={() => { setCurrentTab(item.id); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-4 px-6 py-4.5 rounded-3xl text-sm font-black transition-all ${currentTab === item.id ? 'bg-blue-600 text-white shadow-2xl shadow-blue-900/40' : 'text-gray-600 hover:bg-[#111] hover:text-gray-200'}`}><i className={`ph ${item.icon} text-2xl`}></i> {item.label}</button>))}
+              {navItems.map(item => (<button key={item.id} onClick={() => { setCurrentTab(item.id); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-4 px-6 py-4.5 rounded-3xl text-sm font-black transition-all ${currentTab === item.id ? 'bg-blue-600 text-white shadow-2xl' : 'text-gray-600 hover:bg-[#111]'}`}><i className={`ph ${item.icon} text-2xl`}></i> {item.label}</button>))}
             </nav>
           </aside>
           <main className="flex-1 flex flex-col min-w-0 overflow-visible">
             <header className="flex items-center justify-between p-6 glass-panel border-b border-[#1a1a1a] gap-6 z-[1600] overflow-visible">
-              <div className="flex items-center gap-6 flex-1 overflow-visible"><button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-3"><i className="ph ph-list text-3xl" /></button>
-                <GlobalSearch onSelectResult={handleSearchResult} />
-              </div>
-              <div className="hidden md:flex items-center gap-4"><div className="text-right leading-none"><div className="text-[10px] font-black text-white uppercase mb-1">Jake Lee</div><div className="text-[9px] text-green-500 font-bold uppercase tracking-widest">Master Admin</div></div><div className="h-12 w-12 rounded-[1.25rem] bg-[#111] border border-[#222] flex items-center justify-center font-black text-blue-500 text-lg">J</div></div>
+              <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-3"><i className="ph ph-list text-3xl" /></button>
+              <GlobalSearch onSelectResult={(res) => { setCurrentTab('field'); setHighlightId(res.id); setTimeout(() => setHighlightId(null), 3000); }} />
+              <div className="h-12 w-12 rounded-[1.25rem] bg-[#111] border border-[#222] flex items-center justify-center font-black text-blue-500 text-lg">J</div>
             </header>
             <div className="flex-1 p-6 md:p-10 overflow-hidden relative">
               {currentTab === 'field' && <FieldMaster highlightId={highlightId} />}
-              {currentTab === 'project' && <KanbanBoard />}
-              {currentTab === 'calendar' && <CalendarView />}
               {currentTab === 'engraving' && <EngravingView />}
+              {currentTab === 'calendar' && <div className="p-10 text-center">통합 일정 서비스 준비 중</div>}
             </div>
           </main>
         </div>);
