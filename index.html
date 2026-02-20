@@ -13,7 +13,7 @@
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
 
   <style>
-    body { background-color: #121212; color: #e0e0e0; font-family: 'Pretendard', sans-serif; overflow: hidden; }
+    body { background-color: #121212; color: #d1d5db; font-family: 'Pretendard', sans-serif; overflow: hidden; }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: #1e1e1e; }
     ::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
@@ -27,28 +27,21 @@
       width: 80px; min-width: 80px; height: 65px; 
       display: flex; flex-direction: column; justify-content: center; align-items: center; 
       border-radius: 6px; font-size: 0.7rem; text-align: center; 
-      border: 1px solid transparent; /* 두꺼운 네온 테두리 제거, 얇은 1px 라인 적용 */
+      border: 1px solid transparent; 
       cursor: pointer; transition: transform 0.1s, filter 0.2s; 
     }
     .slot:active { transform: scale(0.95); }
     .slot-spacer { visibility: hidden; pointer-events: none; border: none; }
     
-    /* 🎨 적녹 색약(Colorblind) 맞춤형 차분한 팔레트 */
-    /* 1. 미분양(공백): 밝은 회색/흰색 톤 유지 (가장 명확한 대비) */
-    .status-미분양 { background-color: #f3f4f6; color: #111111; border-color: #d1d5db; }
+    /* 🎨 시각 보호 팔레트 (대비 감소, 소프트 톤 적용) */
+    .status-미분양 { background-color: #e5e7eb; color: #374151; border-color: #d1d5db; }
+    .status-예약 { background-color: #0c4a6e; color: #7dd3fc; border-color: #0369a1; }
+    .status-계약금 { background-color: #713f12; color: #fde047; border-color: #a16207; }
+    .status-홀딩 { background-color: #4a044e; color: #f9a8d4; border-color: #a21caf; font-weight: bold; }
+    .status-안치 { background-color: #1e293b; color: #94a3b8; border-color: #475569; font-weight: bold; }
     
-    /* 2. 예약: 스카이 블루 (적녹과 무관하게 명확히 인지되는 색) */
-    .status-예약 { background-color: #0c4a6e; color: #bae6fd; border-color: #0369a1; }
-    
-    /* 3. 계약금: 차분한 골드/머스터드 (노란색 계열) */
-    .status-계약금 { background-color: #713f12; color: #fef08a; border-color: #a16207; }
-    
-    /* 4. 홀딩: 붉은색 대신 명확히 구분되는 '보라색(Purple)' 사용 */
-    .status-홀딩 { background-color: #4a044e; color: #fbcfe8; border-color: #a21caf; font-weight: bold; }
-    
-    /* 5. 안치: 초록색 대신 '어두운 청회색(Dark Slate)'을 사용하여 차분하고 묵직한 마감 느낌 부여 */
-    .status-안치 { background-color: #1e293b; color: #cbd5e1; border-color: #475569; font-weight: bold; }
-    .status-안치 .deceased-name { color: #ffffff; font-size: 0.75rem; } 
+    /* 텍스트 쨍함(Halation) 방지: 순백색(#fff) 대신 차분한 연회색(#cbd5e1) 사용 */
+    .status-안치 .deceased-name { color: #cbd5e1; font-size: 0.75rem; font-weight: 600; } 
   </style>
 </head>
 <body>
@@ -82,7 +75,7 @@
         { id: '완료', title: '✅ 완료', border: 'border-slate-500' }
       ];
 
-      if (loading) return <div className="p-8 text-center text-gray-400 animate-pulse">칸반 데이터 동기화 중...</div>;
+      if (loading) return <div className="p-8 text-center text-gray-500 animate-pulse">칸반 데이터 동기화 중...</div>;
 
       return (
         <div className="flex gap-4 overflow-x-auto h-full pb-4 items-start">
@@ -91,17 +84,17 @@
             return (
               <div key={col.id} className="kanban-col flex flex-col h-full glass-panel rounded-xl p-3 shrink-0">
                 <div className={`text-sm font-bold mb-3 flex justify-between items-center border-b-2 pb-2 ${col.border}`}>
-                  <span>{col.title}</span>
+                  <span className="text-gray-300">{col.title}</span>
                   <span className="bg-[#111] text-gray-400 px-2 py-0.5 rounded-full text-xs border border-[#333]">{colProjects.length}</span>
                 </div>
                 <div className="flex-1 overflow-y-auto space-y-3 pr-1">
                   {colProjects.map(p => (
-                    <div key={p.id} className="bg-[#222] p-3 rounded-lg border border-[#333] shadow-sm hover:border-gray-400 cursor-pointer transition-colors border-l-4 border-l-gray-500">
+                    <div key={p.id} className="bg-[#1e1e1e] p-3 rounded-lg border border-[#333] shadow-sm hover:border-gray-500 cursor-pointer transition-colors border-l-4 border-l-gray-500">
                       <div className="text-[10px] text-gray-500 mb-1 flex justify-between">
                         <span>{p.id}</span>
                         <span className={p.priority === '상' ? 'text-red-400 font-bold' : ''}>{p.priority}</span>
                       </div>
-                      <div className="font-bold text-sm text-gray-200 mb-2 leading-tight">{p.title}</div>
+                      <div className="font-bold text-sm text-gray-300 mb-2 leading-tight">{p.title}</div>
                       <div className="flex justify-between items-end text-xs text-gray-500">
                         <span>{p.personnel || '담당미정'}</span>
                         <span className="bg-[#111] px-1.5 py-0.5 rounded border border-[#333]">{p.end_date ? p.end_date.substring(5) : '-'}</span>
@@ -135,19 +128,20 @@
       useEffect(() => {
         async function fetchLocations() {
           try {
-            const { data } = await supabase.from('master_locations').select('*');
+            // 🚨 핵심 수정: 1,000개 제한을 풀고 10,000개까지 한 번에 로드
+            const { data } = await supabase.from('master_locations').select('*').limit(10000);
             if (data) {
               setLocations(data);
               const uniqueSections = [...new Set(data.map(item => item.section).filter(Boolean))].sort();
               setSections(uniqueSections);
-              if (uniqueSections.length > 0) setActiveSection('A2/가');
+              if (uniqueSections.length > 0) setActiveSection('A6/가'); // 테스트를 위해 문제가 있던 A6/가부터 표시
             }
           } finally { setLoading(false); }
         }
         fetchLocations();
       }, []);
 
-      if (loading) return <div className="p-8 text-center text-gray-400 animate-pulse">현장 데이터 동기화 중...</div>;
+      if (loading) return <div className="p-8 text-center text-gray-500 animate-pulse">전체 수목 현장 동기화 중 (Limit 10,000)...</div>;
 
       const currentData = locations.filter(loc => loc.section === activeSection);
       const layout = rowConfig[activeSection] || [20, 20]; 
@@ -185,12 +179,12 @@
 
       return (
         <div className="flex flex-col h-full glass-panel rounded-xl overflow-hidden border border-[#333]">
-          <div className="flex overflow-x-auto bg-[#161616] p-2 gap-2 border-b border-[#333] shrink-0">
+          <div className="flex overflow-x-auto bg-[#1a1a1a] p-2 gap-2 border-b border-[#333] shrink-0">
             {sections.map(sec => (
               <button 
                 key={sec} 
                 onClick={() => setActiveSection(sec)}
-                className={`px-4 py-1.5 rounded-md text-sm font-bold whitespace-nowrap transition-colors ${activeSection === sec ? 'bg-blue-600 text-white shadow-lg' : 'bg-transparent text-gray-500 hover:text-gray-300'}`}
+                className={`px-4 py-1.5 rounded-md text-sm font-bold whitespace-nowrap transition-colors ${activeSection === sec ? 'bg-[#333] text-gray-200 border border-[#555] shadow-lg' : 'bg-transparent text-gray-500 hover:text-gray-300 border border-transparent'}`}
               >
                 {sec}
               </button>
@@ -198,7 +192,7 @@
           </div>
           <div className="flex-1 overflow-auto p-4 bg-[#111]">
             <div className="w-max pb-10">
-              {rows.length > 0 ? rows : <div className="text-gray-500">이 구역의 데이터가 없습니다.</div>}
+              {rows.length > 0 ? rows : <div className="text-gray-600">이 구역의 데이터가 없습니다.</div>}
             </div>
           </div>
         </div>
@@ -222,17 +216,17 @@
 
           <aside className={`fixed md:static inset-y-0 left-0 z-50 w-64 glass-panel border-r border-[#333] transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-200 ease-in-out flex flex-col`}>
             <div className="p-5 flex justify-between items-center border-b border-[#333]">
-              <h1 className="text-xl font-extrabold text-white tracking-tight">Jake<span className="text-blue-500">OS</span></h1>
-              <button className="md:hidden text-gray-400 hover:text-white" onClick={() => setIsSidebarOpen(false)}><i className="ph ph-x text-2xl"></i></button>
+              <h1 className="text-xl font-extrabold text-gray-200 tracking-tight">Jake<span className="text-blue-500">OS</span></h1>
+              <button className="md:hidden text-gray-500 hover:text-gray-300" onClick={() => setIsSidebarOpen(false)}><i className="ph ph-x text-2xl"></i></button>
             </div>
             
             <nav className="flex-1 p-4 space-y-2">
-              <div className="text-xs font-bold text-gray-500 mb-2 px-2">MODULES</div>
+              <div className="text-xs font-bold text-gray-600 mb-2 px-2">MODULES</div>
               {navItems.map(item => (
                 <button
                   key={item.id}
                   onClick={() => { setCurrentTab(item.id); setIsSidebarOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${currentTab === item.id ? 'bg-[#222] text-gray-200 border border-[#444]' : 'text-gray-500 hover:bg-[#1a1a1a] hover:text-gray-300 border border-transparent'}`}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${currentTab === item.id ? 'bg-[#222] text-gray-300 border border-[#444]' : 'text-gray-500 hover:bg-[#1a1a1a] hover:text-gray-300 border border-transparent'}`}
                 >
                   <i className={`ph ${item.icon} text-lg`}></i> {item.label}
                 </button>
@@ -242,8 +236,8 @@
 
           <main className="flex-1 flex flex-col min-w-0">
             <header className="md:hidden flex items-center justify-between p-4 glass-panel border-b border-[#333] z-30">
-              <button className="text-gray-400" onClick={() => setIsSidebarOpen(true)}><i className="ph ph-list text-2xl"></i></button>
-              <span className="font-bold text-gray-200 text-sm">{navItems.find(i => i.id === currentTab)?.label}</span>
+              <button className="text-gray-500" onClick={() => setIsSidebarOpen(true)}><i className="ph ph-list text-2xl"></i></button>
+              <span className="font-bold text-gray-300 text-sm">{navItems.find(i => i.id === currentTab)?.label}</span>
               <div className="w-6"></div>
             </header>
 
