@@ -41,7 +41,7 @@
     .slot-spacer { visibility: hidden; width: 82px; }
 
     .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: 1fr; gap: 1px; background-color: #222; flex: 1; min-height: 0; }
-    .calendar-day { background-color: #111; padding: 6px; cursor: pointer; transition: background 0.1s; display: flex; flex-direction: column; overflow: hidden; }
+    .calendar-day { background-color: #111; padding: 6px; cursor: pointer; transition: background 0.1s; display: flex; flex-direction: column; overflow: hidden;}
     .calendar-day:hover { background-color: #1a1a1a; }
     .calendar-day.today { border: 2px solid #facc15; background-color: #1a1e1a; }
     
@@ -52,19 +52,19 @@
 <body>
   <div id="root"></div>
   <script type="text/babel">
-    const { useState, useEffect, useMemo } = React;
+    const { useState, useEffect, useMemo, memo } = React;
     const SUPABASE_URL = 'https://lqccxnciiajwqdmpwjdv.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxY2N4bmNpaWFqd3FkbXB3amR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MjA3MTMsImV4cCI6MjA4NzA5NjcxM30.L23-eq-DIPsbONOeX-xQ8UcMb7gtgTTTRpkaSm9HTw4';
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // 🚨 절대 서열 정리
+    // 🚨 절대 서열 정리기
     const getEngPriority = (status) => {
       const s = String(status || '').trim();
       if (s === '접수') return 0;
       if (s === '디자인완료' || s === '시안대기') return 1;
       if (s === '각인완료' || s === '작업중' || s === '각인') return 2;
       if (s === '설치완료' || s === '완료') return 3;
-      return 0; 
+      return 0; // 예외값은 무조건 위로 (접수 취급)
     };
     const getEngClass = (status) => {
       const p = getEngPriority(status);
@@ -75,13 +75,14 @@
       return 'eng-접수';
     };
 
+    // 🚨 안전한 날짜 변환 함수 (빈칸은 1970년=0으로 만들어 맨 밑으로 내림)
     const getSafeTime = (dateStr) => {
       if (!dateStr || String(dateStr).trim() === '') return 0;
       const t = new Date(dateStr).getTime();
       return isNaN(t) ? 0 : t;
     };
 
-    // [1. 통합 검색]
+    // [1. 탭 연동형 통합 검색]
     function GlobalSearch({ onSelectResult, currentTab }) {
       const [query, setQuery] = useState('');
       const [results, setResults] = useState([]);
@@ -90,24 +91,32 @@
         const t = setTimeout(async () => {
           let tableName = 'master_locations';
           if (currentTab === 'engraving') tableName = 'engravings';
+          if (currentTab === 'contact') tableName = 'contacts';
           
           try {
-            const { data } = await supabase.from(tableName).select('*').or(`deceased_name.ilike.%${query}%,contractor.ilike.%${query}%`).limit(10);
+            let data = [];
+            if (tableName === 'contacts') {
+              const res = await supabase.from('contacts').select('*').or(`company_name.ilike.%${query}%,manager_name.ilike.%${query}%`).limit(10);
+              data = res.data;
+            } else {
+              const res = await supabase.from(tableName).select('*').or(`deceased_name.ilike.%${query}%,contractor.ilike.%${query}%`).limit(10);
+              data = res.data;
+            }
             setResults(data || []);
-          } catch(e) { console.log(e); }
+          } catch(e) {}
         }, 300);
         return () => clearTimeout(t);
       }, [query, currentTab]);
 
       return (
         <div className="relative w-full max-w-md z-[9999]">
-          <input type="text" placeholder={`고인명/계약자 검색 (${currentTab === 'engraving' ? '각인DB' : '현장DB'})`} className="jake-input pl-4 shadow-2xl" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <input type="text" placeholder={`통합 검색 (${currentTab === 'engraving' ? '각인DB' : currentTab === 'contact' ? '연락처DB' : '현장DB'})`} className="jake-input pl-4 shadow-2xl" value={query} onChange={(e) => setQuery(e.target.value)} />
           {results.length > 0 && (
             <div className="absolute top-full left-0 right-0 mt-2 glass-panel rounded-xl shadow-[0_30px_60px_rgba(0,0,0,0.9)] z-[9999] p-1 border border-[#444] max-h-80 overflow-y-auto">
               {results.map(res => (
                 <div key={res.id} onClick={() => { onSelectResult(res); setQuery(''); setResults([]); }} className="p-4 hover:bg-[#222] rounded-lg cursor-pointer border-b border-[#333] last:border-0 transition-colors">
-                  <div className="text-[10px] text-blue-400 font-bold mb-0.5">{res.section || res.location || '위치미상'}</div>
-                  <div className="font-bold text-gray-100">{res.deceased_name || '(공란)'} <span className="text-xs font-normal text-gray-500 ml-2">| {res.contractor}</span></div>
+                  <div className="text-[10px] text-blue-400 font-bold mb-0.5">{currentTab === 'contact' ? res.category : (res.section || res.location || '위치미상')}</div>
+                  <div className="font-bold text-gray-100">{currentTab === 'contact' ? res.company_name : (res.deceased_name || '(공란)')} <span className="text-xs font-normal text-gray-500 ml-2">| {currentTab === 'contact' ? res.manager_name : res.contractor}</span></div>
                 </div>
               ))}
             </div>
@@ -116,11 +125,11 @@
       );
     }
 
-    // 🗔 [각인 데이터 신규/수정 에디터 모달]
+    // 🗔 [각인 데이터 에디터 모달]
     function EngravingEditorModal({ item, onClose }) {
       const [formData, setFormData] = useState({ ...item });
       const [isSaving, setIsSaving] = useState(false);
-      const isNew = !formData.id; // ID가 없으면 신규 생성 모드
+      const isNew = !formData.id;
 
       const handleChange = (e) => {
         const { name, value } = e.target;
@@ -130,28 +139,18 @@
       const handleSave = async () => {
         if (!formData.deceased_name) return alert("고인명은 필수입니다.");
         setIsSaving(true);
-        
         try {
           if (isNew) {
-            // 신규 인서트
-            await supabase.from('engravings').insert([{
-              ...formData,
-              id: crypto.randomUUID(), // 수동 UUID 부여
-              status: formData.status || '접수'
-            }]);
+            await supabase.from('engravings').insert([{ ...formData, id: crypto.randomUUID(), status: formData.status || '접수' }]);
           } else {
-            // 기존 업데이트
             await supabase.from('engravings').update(formData).eq('id', formData.id);
           }
           window.location.reload(); 
-        } catch(e) {
-          console.error(e);
-          setIsSaving(false);
-        }
+        } catch(e) { console.error(e); setIsSaving(false); }
       };
 
       const handleDelete = async () => {
-        if (!confirm("정말 이 각인 데이터를 삭제하시겠습니까?")) return;
+        if (!confirm("정말 이 데이터를 삭제하시겠습니까?")) return;
         setIsSaving(true);
         await supabase.from('engravings').delete().eq('id', formData.id);
         window.location.reload();
@@ -172,14 +171,14 @@
                 <div className="space-y-1"><label className="text-[10px] font-black text-blue-400 uppercase">고인명 (필수)</label><input name="deceased_name" value={formData.deceased_name || ''} onChange={handleChange} className="jake-input border-blue-900" /></div>
                 <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">안치일정</label><input type="date" name="scheduled_date" value={formData.scheduled_date || ''} onChange={handleChange} className="jake-input" /></div>
                 
-                {/* 🚨 규격 및 종교 빠른 입력 버튼 적용 */}
+                {/* 🚨 규격 및 종교 퀵 버튼 적용 */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-gray-500 uppercase">규격</label>
                   <input name="size_spec" value={formData.size_spec || ''} onChange={handleChange} className="jake-input" placeholder="직접입력" />
                   <div className="flex gap-1 mt-1 flex-wrap">
-                    <button onClick={()=>setFormData({...formData, size_spec:'160*100'})} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">160*100</button>
-                    <button onClick={()=>setFormData({...formData, size_spec:'130*80'})} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">130*80</button>
-                    <button onClick={()=>setFormData({...formData, size_spec:'100*62'})} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">100*62</button>
+                    <button onClick={(e)=>{e.preventDefault(); setFormData({...formData, size_spec:'160*100'})}} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">160*100</button>
+                    <button onClick={(e)=>{e.preventDefault(); setFormData({...formData, size_spec:'130*80'})}} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">130*80</button>
+                    <button onClick={(e)=>{e.preventDefault(); setFormData({...formData, size_spec:'100*62'})}} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">100*62</button>
                   </div>
                 </div>
                 
@@ -187,14 +186,14 @@
                   <label className="text-[10px] font-black text-gray-500 uppercase">종교 / 특이사항</label>
                   <input name="religion" value={formData.religion || ''} onChange={handleChange} className="jake-input" placeholder="직접입력" />
                   <div className="flex gap-1 mt-1 flex-wrap">
-                    <button onClick={()=>setFormData({...formData, religion:'기본'})} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">기본</button>
-                    <button onClick={()=>setFormData({...formData, religion:'사용자 요청 디자인'})} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">요청 디자인</button>
-                    <button onClick={()=>setFormData({...formData, religion:'교회직분 추가'})} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">교회직분</button>
-                    <button onClick={()=>setFormData({...formData, religion:'세례명 추가'})} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">세례명</button>
+                    <button onClick={(e)=>{e.preventDefault(); setFormData({...formData, religion:'기본'})}} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">기본</button>
+                    <button onClick={(e)=>{e.preventDefault(); setFormData({...formData, religion:'사용자 요청 디자인'})}} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">요청 디자인</button>
+                    <button onClick={(e)=>{e.preventDefault(); setFormData({...formData, religion:'교회직분 추가'})}} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">교회직분</button>
+                    <button onClick={(e)=>{e.preventDefault(); setFormData({...formData, religion:'세례명 추가'})}} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">세례명</button>
                   </div>
                 </div>
                 
-                <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">위치 정보 (동/구역/번호)</label><input name="location" value={formData.location || ''} onChange={handleChange} className="jake-input text-blue-400" /></div>
+                <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">위치 정보 (구역/번호)</label><input name="location" value={formData.location || ''} onChange={handleChange} className="jake-input text-blue-400" /></div>
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-[#1a1a1a] rounded-xl border border-[#222]">
@@ -214,7 +213,6 @@
                     <option value="설치완료">설치완료</option>
                   </select>
                 </div>
-                
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-gray-500 uppercase">각인 레이아웃</label>
                   <textarea name="grave_layout" value={formData.grave_layout || ''} onChange={handleChange} className="jake-input h-28 font-mono leading-relaxed" />
@@ -241,7 +239,7 @@
       const [rawList, setRawList] = useState([]);
       const [loading, setLoading] = useState(true);
       const [viewMode, setViewMode] = useState('list');
-      const [editingItem, setEditingItem] = useState(null); // 신규 등록 시 빈 객체 {} 할당
+      const [editingItem, setEditingItem] = useState(null);
 
       useEffect(() => {
         async function fetchEngravings() {
@@ -252,11 +250,9 @@
         fetchEngravings();
       }, []);
 
-      useEffect(() => {
-        if (highlightItem) setEditingItem(highlightItem);
-      }, [highlightItem]);
+      useEffect(() => { if (highlightItem) setEditingItem(highlightItem); }, [highlightItem]);
 
-      // 🚨 절대 정렬 알고리즘 
+      // 🚨 절대 정렬 알고리즘 (오선하 증발 및 과거 데이터 우선 문제 완벽 해결)
       const sortedFolders = useMemo(() => {
         const valid = rawList.filter(i => i.deceased_name && String(i.deceased_name).trim() !== '' && i.deceased_name !== '.');
 
@@ -272,7 +268,7 @@
             const pA = getEngPriority(a.status);
             const pB = getEngPriority(b.status);
             if (pA !== pB) return pA - pB;
-            // 오선하님 구출: 미래 날짜가 상단으로 오도록 내림차순(b - a)
+            // 🚨 오름차순 연산 변경: 미래 날짜가 상단(음수). 빈 날짜는 0이므로 하단으로 밀림.
             return getSafeTime(b.scheduled_date) - getSafeTime(a.scheduled_date); 
           });
           return { cNo, items };
@@ -282,10 +278,10 @@
           const pA = Math.min(...folderA.items.map(i => getEngPriority(i.status)));
           const pB = Math.min(...folderB.items.map(i => getEngPriority(i.status)));
           if (pA !== pB) return pA - pB; 
-          
+          // 폴더 대표 날짜도 Math.max로 가장 미래 날짜를 찾아 그것을 기준으로 상단 배치
           const dateA = Math.max(...folderA.items.filter(i => getEngPriority(i.status) === pA).map(i => getSafeTime(i.scheduled_date)));
           const dateB = Math.max(...folderB.items.filter(i => getEngPriority(i.status) === pB).map(i => getSafeTime(i.scheduled_date)));
-          return dateB - dateA; // 미래 날짜 폴더가 상단
+          return dateB - dateA;
         });
 
         return folderArray;
@@ -296,18 +292,16 @@
       return (
         <div className="h-full flex flex-col relative">
           <div className="flex justify-between items-center mb-6">
-            {/* 🚨 각인 신규 등록 버튼 (Jake 요청 사항) */}
             <button onClick={() => setEditingItem({})} className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black shadow-lg hover:bg-blue-500 transition-colors">
               <i className="ph ph-plus-circle mr-1"></i> 신규 각인 등록
             </button>
-
             <div className="flex bg-[#111] p-1.5 rounded-xl border border-[#222]">
               <button onClick={() => setViewMode('list')} className={`px-5 py-2 rounded-lg text-sm font-black transition-all ${viewMode === 'list' ? 'bg-[#333] text-white' : 'text-gray-500 hover:text-white'}`}>리스트 뷰</button>
               <button onClick={() => setViewMode('calendar')} className={`px-5 py-2 rounded-lg text-sm font-black transition-all ${viewMode === 'calendar' ? 'bg-[#333] text-white' : 'text-gray-500 hover:text-white'}`}>각인 달력</button>
             </div>
           </div>
           
-          <div className="flex-1 overflow-y-auto pr-2 pb-40">
+          <div className="flex-1 overflow-y-auto pr-2 pb-40 custom-scrollbar">
             {viewMode === 'list' ? (
               <div className="space-y-4">
                 {sortedFolders.map(folderInfo => {
@@ -378,6 +372,7 @@
       );
     }
 
+    // [각인 전용 달력 컴포넌트]
     function EngravingCalendar({ rawList, onSelect }) {
       const [currentDate, setCurrentDate] = useState(new Date());
       const days = [];
@@ -432,14 +427,12 @@
           if (type === '안치') {
             if (!formData.name) return alert("고인명을 입력해주세요.");
             await supabase.from('interments').insert([{ 
-              id: crypto.randomUUID(),
-              deceased_name: formData.name, contractor: formData.contractor, scheduled_date: formData.date, location_id: formData.location, memo: formData.memo 
+              id: crypto.randomUUID(), deceased_name: formData.name, contractor: formData.contractor, scheduled_date: formData.date, location_id: formData.location, memo: formData.memo 
             }]);
           } else {
             if (!formData.name) return alert("고객명을 입력해주세요.");
             await supabase.from('sales_pipeline').insert([{ 
-              id: crypto.randomUUID(),
-              customer_name: formData.name, agency_corp: formData.contractor, visit_date: formData.date, memo: formData.memo 
+              id: crypto.randomUUID(), customer_name: formData.name, agency_corp: formData.contractor, visit_date: formData.date, memo: formData.memo 
             }]);
           }
           window.location.reload();
@@ -459,23 +452,19 @@
                 <button onClick={() => setType('안치')} className={`flex-1 py-3 rounded-xl font-black transition-colors ${type === '안치' ? 'bg-green-700 text-white' : 'bg-[#222] text-gray-500'}`}>🟢 안치 일정</button>
                 <button onClick={() => setType('답사')} className={`flex-1 py-3 rounded-xl font-black transition-colors ${type === '답사' ? 'bg-yellow-600 text-black' : 'bg-[#222] text-gray-500'}`}>🟡 영업/답사</button>
               </div>
-
               <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">예정일</label><input type="date" value={formData.date || ''} onChange={e=>setFormData({...formData, date: e.target.value})} className="jake-input" /></div>
               <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">{type === '안치' ? '고인명' : '고객명'}</label><input value={formData.name || ''} onChange={e=>setFormData({...formData, name: e.target.value})} className="jake-input" /></div>
               <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">{type === '안치' ? '계약자' : '영업사/담당자'}</label><input value={formData.contractor || ''} onChange={e=>setFormData({...formData, contractor: e.target.value})} className="jake-input" /></div>
-              
               {type === '안치' && <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">위치</label><input value={formData.location || ''} onChange={e=>setFormData({...formData, location: e.target.value})} className="jake-input" /></div>}
-              
               <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">세부 메모</label><textarea value={formData.memo || ''} onChange={e=>setFormData({...formData, memo: e.target.value})} className="jake-input h-24" /></div>
             </div>
-
             <button onClick={handleSave} disabled={isSaving} className="w-full mt-8 bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-black text-white transition-colors">{isSaving ? '저장 중...' : '일정 저장'}</button>
           </div>
         </div>
       );
     }
 
-    // [3. 통합 일정 메인 (입력 버튼 추가)]
+    // [3. 통합 일정 (각인 제외 및 중앙정렬 대시보드)]
     function CalendarView() {
       const [events, setEvents] = useState([]);
       const [dashCounts, setDashCounts] = useState({ inter: 0, visit: 0, leave: 0 });
@@ -483,18 +472,19 @@
       const [currentDate, setCurrentDate] = useState(new Date());
       const [selectedDate, setSelectedDate] = useState(null);
       const [isModalOpen, setIsModalOpen] = useState(false);
-      const [isEditorOpen, setIsEditorOpen] = useState(false); // 🚨 신규 등록 모달 상태
+      const [isEditorOpen, setIsEditorOpen] = useState(false);
 
       useEffect(() => {
         async function fetchAll() {
           try {
+            // 통합일정 달력에는 안치/답사만 (각인은 제외)
             const { data: inter } = await supabase.from('interments').select('*');
             const { data: pipe } = await supabase.from('sales_pipeline').select('*');
             const { data: att } = await supabase.from('attendance').select('*');
             
             let merged = [];
-            if (inter) merged = [...merged, ...inter.filter(i=>i.scheduled_date).map(i => ({ date: i.scheduled_date, title: `${i.deceased_name}(안치)`, type: '안치', memo: i.memo }))];
-            if (pipe) merged = [...merged, ...pipe.filter(p=>p.visit_date).map(p => ({ date: p.visit_date, title: `${p.customer_name}(답사)`, type: '답사', memo: p.memo }))];
+            if (inter) merged = [...merged, ...inter.filter(i=>i.scheduled_date).map(i => ({ id: i.id, date: i.scheduled_date, title: `${i.deceased_name}(안치)`, type: '안치', memo: i.memo }))];
+            if (pipe) merged = [...merged, ...pipe.filter(p=>p.visit_date).map(p => ({ id: p.id, date: p.visit_date, title: `${p.customer_name}(답사)`, type: '답사', memo: p.memo }))];
             
             setEvents(merged);
 
@@ -503,7 +493,7 @@
             const tVisit = pipe ? pipe.filter(p => p.visit_date === todayStr).length : 0;
             const tLeave = att ? att.filter(a => a.work_date === todayStr && a.status === '휴무').length : 0;
             setDashCounts({ inter: tInter, visit: tVisit, leave: tLeave });
-          } catch (error) { console.log(error); }
+          } catch (error) {}
           setLoading(false);
         }
         fetchAll();
@@ -538,12 +528,12 @@
       return (
         <div className="h-full flex flex-col gap-4">
           <div className="flex justify-end mb-2">
-            {/* 🚨 통합일정 신규 등록 버튼 */}
             <button onClick={() => setIsEditorOpen(true)} className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black shadow-lg hover:bg-blue-500 transition-colors">
               <i className="ph ph-plus-circle mr-1"></i> 신규 일정 등록
             </button>
           </div>
 
+          {/* 🚨 대시보드 3등분 쫙 펴지게 수정 */}
           <details open className="bg-[#111] rounded-2xl border border-[#222] group shadow-lg">
             <summary className="p-4 font-black text-white flex justify-between items-center outline-none cursor-pointer hover:bg-[#1a1a1a] transition-colors rounded-2xl">
               <div className="flex items-center gap-3">
@@ -582,11 +572,12 @@
             <div className="grid grid-cols-7 text-center text-[11px] py-3 bg-[#000] text-gray-600 font-bold border-b border-[#222] tracking-widest">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=> <div key={d}>{d}</div>)}</div>
             <div className="calendar-grid flex-1 overflow-y-auto">{days}</div>
 
+            {/* 통합일정 팝업 - 세부사항 아코디언 적용 */}
             {isModalOpen && (
               <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" onClick={() => setIsModalOpen(false)}>
                 <div className="bg-[#1a1a1a] border border-[#333] rounded-[2.5rem] w-full max-w-md p-10 shadow-2xl" onClick={e => e.stopPropagation()}>
                   <div className="flex justify-between items-start mb-8 border-b border-[#333] pb-4">
-                    <div><h3 className="text-2xl font-black text-white">{selectedDate?.split('-')[2]}일 일정</h3></div>
+                    <div><h3 className="text-2xl font-black text-white">{selectedDate?.split('-')[2]}일 일정</h3><p className="text-sm text-blue-500 font-mono font-bold mt-2">{selectedDate}</p></div>
                     <button onClick={() => setIsModalOpen(false)}><i className="ph ph-x text-3xl text-gray-500 hover:text-white" /></button>
                   </div>
                   <div className="space-y-4 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
@@ -612,17 +603,17 @@
               </div>
             )}
 
-            {/* 신규 일정 모달 렌더링 */}
             {isEditorOpen && <ScheduleEditorModal onClose={() => setIsEditorOpen(false)} />}
           </div>
         </div>
       );
     }
 
-    // [4. 현장 마스터 - 정보 팝업 (계약번호 연동 확인 완료)]
+    // [4. 현장 마스터 - 정보 팝업 (계약번호 크로스 연동)]
     function FieldMaster({ highlightId }) {
       const [locations, setLocations] = useState([]); const [sections, setSections] = useState([]); const [activeSection, setActiveSection] = useState(''); const [loading, setLoading] = useState(true);
       const [isModalOpen, setIsModalOpen] = useState(false); const [selectedSlot, setSelectedSlot] = useState(null);
+      const [linkedContractNo, setLinkedContractNo] = useState(''); // 🚨 interments에서 가져온 계약번호
       
       const rowConfig = { 'A2/가':[12], 'A3/가':[8,8], 'A4/가':[12,12,12,12,18,18,28,12], 'A4/나':[9,11,7,8,8], 'A4/다':[6,6], 'A5/가':[13,14,14,13,13,15,11], 'A5/나':[23,22,26,25,30,47,47,30,39], 'A6/가':[27,27,22,18,19,15,13], 'A6/나':[25,26,26,26,26,26], 'C1/가':[13,17,21,25], 'B1/가':[20,23], 'B2/가':[34,34,35,34,34], 'B3/가':[48,46,45,41], 'B4/가':[37,38,41,41,34], 'B5/가':[47,47,49,48,40,32], 'B6/가/1-12':[47,52,53,52,53,53,54,54,54,53,55,54,50], 'B6/가/13-14':[75,75,75,75,75,75,75,75,75] };
 
@@ -645,9 +636,24 @@
       useEffect(() => {
         if (highlightId) {
           const item = locations.find(l => l.id === highlightId);
-          if (item) { setActiveSection(item.section); setSelectedSlot(item); setIsModalOpen(true); }
+          if (item) { 
+            setActiveSection(item.section); 
+            setSelectedSlot(item); 
+            fetchLinkedContract(item.id);
+            setIsModalOpen(true); 
+          }
         }
       }, [highlightId, locations]);
+
+      // 🚨 interments 테이블에서 계약번호 긁어오기
+      const fetchLinkedContract = async (locationId) => {
+        setLinkedContractNo('로딩 중...');
+        try {
+          const { data } = await supabase.from('interments').select('contract_no').eq('location_id', locationId).limit(1);
+          if (data && data.length > 0 && data[0].contract_no) setLinkedContractNo(data[0].contract_no);
+          else setLinkedContractNo('안치 데이터 없음');
+        } catch(e) { setLinkedContractNo('연동 오류'); }
+      };
 
       if (loading) return <div className="p-10 text-center animate-pulse font-black tracking-widest text-blue-500 uppercase">Syncing Map Data...</div>;
 
@@ -661,7 +667,11 @@
         rows.push(
           <div key={rIdx} className="row-container">
             {rowData.map(i => i.id.includes('SPACER') ? <div key={i.id} className="slot-spacer" /> : (
-              <div key={i.id} className={`slot status-${i.status || '미분양'} ${highlightId === i.id ? 'ring-4 ring-blue-500 scale-110 z-[50] shadow-2xl shadow-blue-500/50' : ''}`} onClick={() => { setSelectedSlot(i); setIsModalOpen(true); }}>
+              <div key={i.id} className={`slot status-${i.status || '미분양'} ${highlightId === i.id ? 'ring-4 ring-blue-500 scale-110 z-[50] shadow-2xl shadow-blue-500/50' : ''}`} onClick={() => { 
+                setSelectedSlot(i); 
+                fetchLinkedContract(i.id);
+                setIsModalOpen(true); 
+              }}>
                 <div className="font-mono text-[10px] opacity-70 font-bold mb-1">{i.slot_no}</div>
                 <div className="truncate w-full px-1 font-black text-[12px]">{i.deceased_name || ''}</div>
               </div>
@@ -677,8 +687,12 @@
       };
       
       const handlePopupSave = async () => {
-        await supabase.from('master_locations').update(selectedSlot).eq('id', selectedSlot.id);
-        setLocations(prev => prev.map(l => l.id === selectedSlot.id ? selectedSlot : l));
+        // master_locations 테이블에는 계약번호 컬럼이 없으므로 payload에서 제외
+        const { id, section, slot_no, deceased_name, contractor, price, status, units, maintenance_fee, memo } = selectedSlot;
+        const payload = { deceased_name, contractor, price, status, units, maintenance_fee, memo };
+        
+        await supabase.from('master_locations').update(payload).eq('id', id);
+        setLocations(prev => prev.map(l => l.id === id ? selectedSlot : l));
         setIsModalOpen(false);
       };
 
@@ -689,7 +703,7 @@
           </div>
           <div className="flex-1 overflow-auto p-8 bg-[#000] custom-scrollbar"><div className="w-max pb-32">{rows}</div></div>
           
-          {/* 🚨 현장 마스터 전용 모달 (계약번호 빈칸이어도 입력 후 저장 가능) */}
+          {/* 🚨 현장 마스터 전용 모달 (계약번호 연동 및 속성 복구) */}
           {isModalOpen && selectedSlot && (
             <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" onClick={() => setIsModalOpen(false)}>
               <div className="bg-[#1a1a1a] border border-[#333] rounded-[2.5rem] w-full max-w-2xl p-10 shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -709,11 +723,11 @@
                   </div>
                   <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">고인명</label><input name="deceased_name" value={selectedSlot.deceased_name || ''} onChange={handlePopupChange} className="jake-input text-white" /></div>
                   
-                  {/* CSV 원본에는 contract_no가 없었기 때문에 기본값은 빈칸입니다. 여기에 직접 입력 후 '정보 저장하기'를 누르면 Supabase에 저장됩니다. */}
-                  <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">계약번호</label><input name="contract_no" value={selectedSlot.contract_no || ''} onChange={handlePopupChange} className="jake-input" placeholder="계약번호 입력" /></div>
-                  <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">계약자명</label><input name="contractor" value={selectedSlot.contractor || ''} onChange={handleChange} className="jake-input" /></div>
+                  {/* 🚨 계약번호는 interments 테이블에서 가져온 읽기 전용 정보 */}
+                  <div className="space-y-1"><label className="text-[10px] font-black text-blue-500 uppercase">계약번호 (안치 데이터 연동)</label><input value={linkedContractNo} readOnly className="jake-input text-gray-400 bg-[#000] border-[#222]" /></div>
+                  <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">계약자명</label><input name="contractor" value={selectedSlot.contractor || ''} onChange={handlePopupChange} className="jake-input" /></div>
                   
-                  <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">기수 (Capacity)</label><input name="units" type="number" value={selectedSlot.units || ''} onChange={handlePopupChange} className="jake-input" /></div>
+                  <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">기수 (Units)</label><input name="units" type="number" value={selectedSlot.units || ''} onChange={handlePopupChange} className="jake-input" /></div>
                   <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">분양가 (Price)</label><input name="price" type="number" value={selectedSlot.price || ''} onChange={handlePopupChange} className="jake-input" /></div>
                   
                   <div className="space-y-1 col-span-1 md:col-span-2"><label className="text-[10px] font-black text-gray-500 uppercase">관리비 (Maintenance Fee)</label><input name="maintenance_fee" type="number" value={selectedSlot.maintenance_fee || ''} onChange={handlePopupChange} className="jake-input" /></div>
@@ -730,9 +744,15 @@
       );
     }
 
-    // [5. 프로젝트 칸반]
+    // [5. 업무 통합 보드 (WorkOS 프로젝트 껍데기만. 추후 연동)]
     function KanbanBoard() {
-      return <div className="p-10 text-center font-black text-gray-600 uppercase text-2xl mt-20">PROJECT MODULE STANDBY</div>;
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-gray-500 border-2 border-dashed border-[#333] rounded-3xl">
+          <i className="ph ph-kanban text-6xl mb-4 text-[#444]"></i>
+          <p className="font-bold text-lg text-gray-400">WorkOS 통합 모듈 준비 중</p>
+          <p className="text-xs text-gray-600 mt-2">업체 연락처, 회의록, 업무 칸반보드</p>
+        </div>
+      );
     }
 
     // [6. 메인 앱 라우터]
