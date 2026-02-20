@@ -21,7 +21,6 @@
     .kanban-col { min-width: 280px; max-width: 320px; }
     .glass-panel { background: rgba(30, 30, 30, 0.8); backdrop-filter: blur(10px); border: 1px solid #333; }
     
-    /* 🌳 현장 마스터 슬롯 스타일 */
     .row-container { display: flex; flex-direction: row; justify-content: flex-start; gap: 4px; margin-bottom: 8px; width: max-content; }
     .slot { 
       width: 80px; min-width: 80px; height: 65px; 
@@ -33,13 +32,20 @@
     .slot:active { transform: scale(0.95); }
     .slot-spacer { visibility: hidden; pointer-events: none; border: none; }
     
-    /* 🎨 시각 보호 팔레트 */
     .status-미분양 { background-color: #e5e7eb; color: #374151; border-color: #d1d5db; }
     .status-예약 { background-color: #0c4a6e; color: #7dd3fc; border-color: #0369a1; }
     .status-계약금 { background-color: #713f12; color: #fde047; border-color: #a16207; }
     .status-홀딩 { background-color: #4a044e; color: #f9a8d4; border-color: #a21caf; font-weight: bold; }
     .status-안치 { background-color: #1e293b; color: #94a3b8; border-color: #475569; font-weight: bold; }
     .status-안치 .deceased-name { color: #cbd5e1; font-size: 0.75rem; font-weight: 600; } 
+
+    /* 입력창 공통 스타일 (시인성 검사 완료) */
+    .jake-input {
+      width: 100%; background-color: #111; color: #e5e7eb; border: 1px solid #444; 
+      border-radius: 0.375rem; padding: 0.5rem; outline: none; transition: border-color 0.2s;
+    }
+    .jake-input:focus { border-color: #3b82f6; }
+    .jake-input::placeholder { color: #6b7280; }
   </style>
 </head>
 <body>
@@ -73,7 +79,7 @@
         { id: '완료', title: '✅ 완료', border: 'border-slate-500' }
       ];
 
-      if (loading) return <div className="p-8 text-center text-gray-500 animate-pulse">칸반 데이터 동기화 중...</div>;
+      if (loading) return <div className="p-8 text-center text-gray-500 animate-pulse">칸반 데이터 로딩 중...</div>;
 
       return (
         <div className="flex gap-4 overflow-x-auto h-full pb-4 items-start">
@@ -112,6 +118,12 @@
       const [sections, setSections] = useState([]);
       const [activeSection, setActiveSection] = useState('');
       const [loading, setLoading] = useState(true);
+      
+      // 모달 상태 관리
+      const [isModalOpen, setIsModalOpen] = useState(false);
+      const [selectedSlot, setSelectedSlot] = useState(null);
+      const [editForm, setEditForm] = useState({});
+      const [isSaving, setIsSaving] = useState(false);
 
       const rowConfig = { 
         'A2/가':[12], 'A3/가':[8,8], 'A4/가':[12,12,12,12,18,18,28,12], 
@@ -130,7 +142,6 @@
             let from = 0;
             const step = 1000;
             
-            // 데이터 무한 펌프 로직
             while (true) {
               const { data, error } = await supabase
                 .from('master_locations')
@@ -138,12 +149,8 @@
                 .range(from, from + step - 1);
                 
               if (error) throw error;
-              if (data && data.length > 0) {
-                allData = [...allData, ...data];
-              }
-              if (!data || data.length < step) {
-                break; 
-              }
+              if (data && data.length > 0) allData = [...allData, ...data];
+              if (!data || data.length < step) break; 
               from += step;
             }
 
@@ -164,6 +171,40 @@
         fetchLocations();
       }, []);
 
+      // 모달 열기 로직
+      const openModal = (slotData) => {
+        setSelectedSlot(slotData);
+        setEditForm({ ...slotData }); // 현재 데이터 복사
+        setIsModalOpen(true);
+      };
+
+      // DB 업데이트 로직 (Zero-Failure)
+      const handleSave = async () => {
+        setIsSaving(true);
+        try {
+          // DB에 바로 업데이트
+          const { error } = await supabase
+            .from('master_locations')
+            .update({
+              status: editForm.status,
+              contractor: editForm.contractor,
+              deceased_name: editForm.deceased_name,
+              memo: editForm.memo
+            })
+            .eq('id', selectedSlot.id);
+            
+          if (error) throw error;
+
+          // 프론트엔드 화면 즉시 갱신 (새로고침 불필요)
+          setLocations(prev => prev.map(loc => loc.id === selectedSlot.id ? { ...loc, ...editForm } : loc));
+          setIsModalOpen(false);
+        } catch (err) {
+          alert('저장 중 오류가 발생했습니다: ' + err.message);
+        } finally {
+          setIsSaving(false);
+        }
+      };
+
       if (loading) return <div className="p-8 text-center text-gray-500 animate-pulse">모든 수목 현장 데이터 로딩 중...</div>;
 
       const currentData = locations.filter(loc => loc.section === activeSection);
@@ -177,7 +218,6 @@
         
         const rowData = currentData.slice(currentIndex, currentIndex + count);
         
-        // 🚨 이 부분의 문법(중괄호 닫기)을 100% 정상 복구했습니다.
         rows.push(
           <div key={`row-${rIdx}`} className="row-container">
             {rowData.map((item, idx) => {
@@ -189,7 +229,7 @@
                 <div 
                   key={item.id} 
                   className={`slot status-${item.status || '미분양'}`}
-                  onClick={() => alert(`[${item.section} ${item.slot_no}]\n계약자: ${item.contractor || '없음'}\n고인명: ${item.deceased_name || '없음'}\n상태: ${item.status}`)}
+                  onClick={() => openModal(item)}
                 >
                   <div className="font-mono text-[10px] opacity-70 mb-0.5 font-semibold">{item.slot_no}</div>
                   <div className="deceased-name truncate w-full px-1">{item.deceased_name || ''}</div>
@@ -202,7 +242,9 @@
       });
 
       return (
-        <div className="flex flex-col h-full glass-panel rounded-xl overflow-hidden border border-[#333]">
+        <div className="flex flex-col h-full glass-panel rounded-xl overflow-hidden border border-[#333] relative">
+          
+          {/* 구역 네비게이션 */}
           <div className="flex overflow-x-auto bg-[#1a1a1a] p-2 gap-2 border-b border-[#333] shrink-0">
             {sections.map(sec => (
               <button 
@@ -214,11 +256,102 @@
               </button>
             ))}
           </div>
+
+          {/* 지도 렌더링 영역 */}
           <div className="flex-1 overflow-auto p-4 bg-[#111]">
             <div className="w-max pb-10">
               {rows.length > 0 ? rows : <div className="text-gray-600">이 구역의 데이터가 없습니다.</div>}
             </div>
           </div>
+
+          {/* 🗔 모달 (Z폴드6 모바일 최적화) */}
+          {isModalOpen && (
+            <div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4">
+              <div className="bg-[#1e1e1e] border border-[#444] rounded-xl w-full max-w-md max-h-[85vh] flex flex-col shadow-2xl">
+                
+                {/* 모달 헤더 */}
+                <div className="flex justify-between items-center p-4 border-b border-[#333] shrink-0">
+                  <div>
+                    <h3 className="text-lg font-bold text-white leading-tight">상세 정보 수정</h3>
+                    <p className="text-xs text-blue-400 font-mono mt-0.5">{selectedSlot.section} {selectedSlot.slot_no}</p>
+                  </div>
+                  <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white transition-colors">
+                    <i className="ph ph-x text-2xl"></i>
+                  </button>
+                </div>
+
+                {/* 모달 바디 (스크롤 영역) */}
+                <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">진행 상태</label>
+                    <select 
+                      value={editForm.status || '미분양'} 
+                      onChange={e => setEditForm({...editForm, status: e.target.value})}
+                      className="jake-input cursor-pointer"
+                    >
+                      <option value="미분양">미분양</option>
+                      <option value="예약">예약</option>
+                      <option value="계약금">계약금</option>
+                      <option value="홀딩">홀딩</option>
+                      <option value="안치">안치</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">계약자명</label>
+                    <input 
+                      type="text" 
+                      value={editForm.contractor || ''} 
+                      onChange={e => setEditForm({...editForm, contractor: e.target.value})}
+                      placeholder="계약자 이름을 입력하세요"
+                      className="jake-input"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">고인명</label>
+                    <input 
+                      type="text" 
+                      value={editForm.deceased_name || ''} 
+                      onChange={e => setEditForm({...editForm, deceased_name: e.target.value})}
+                      placeholder="안치될 고인명을 입력하세요"
+                      className="jake-input"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">현장 메모</label>
+                    <textarea 
+                      value={editForm.memo || ''} 
+                      onChange={e => setEditForm({...editForm, memo: e.target.value})}
+                      placeholder="특이사항을 입력하세요 (예: 가족목 변경 예정)"
+                      className="jake-input h-24 resize-none"
+                    ></textarea>
+                  </div>
+                </div>
+
+                {/* 모달 푸터 */}
+                <div className="p-4 border-t border-[#333] flex justify-end gap-3 shrink-0 bg-[#1a1a1a] rounded-b-xl">
+                  <button 
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 rounded-lg text-sm font-bold text-gray-400 hover:bg-[#333] transition-colors"
+                  >
+                    취소
+                  </button>
+                  <button 
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className="px-6 py-2 rounded-lg text-sm font-bold bg-blue-600 text-white hover:bg-blue-500 transition-colors disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {isSaving ? <i className="ph ph-spinner animate-spin"></i> : <i className="ph ph-floppy-disk"></i>}
+                    {isSaving ? '저장 중...' : '저장'}
+                  </button>
+                </div>
+
+              </div>
+            </div>
+          )}
+
         </div>
       );
     }
