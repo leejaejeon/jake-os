@@ -18,97 +18,204 @@
     ::-webkit-scrollbar-track { background: #1e1e1e; }
     ::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
     
-    .kanban-col { min-width: 280px; max-width: 320px; }
     .glass-panel { background: rgba(30, 30, 30, 0.8); backdrop-filter: blur(10px); border: 1px solid #333; }
     
+    /* 🌳 현장 마스터 & 슬롯 공통 */
     .row-container { display: flex; flex-direction: row; justify-content: flex-start; gap: 4px; margin-bottom: 8px; width: max-content; }
     .slot { 
       width: 80px; min-width: 80px; height: 65px; 
       display: flex; flex-direction: column; justify-content: center; align-items: center; 
-      border-radius: 6px; font-size: 0.7rem; text-align: center; 
-      border: 1px solid transparent; 
-      cursor: pointer; transition: transform 0.1s, filter 0.2s; 
+      border-radius: 6px; font-size: 0.7rem; text-align: center; border: 1px solid transparent; 
+      cursor: pointer; transition: transform 0.1s; 
     }
     .slot:active { transform: scale(0.95); }
-    .slot-spacer { visibility: hidden; pointer-events: none; border: none; }
     
+    /* 🎨 색약 최적화 팔레트 */
     .status-미분양 { background-color: #e5e7eb; color: #374151; border-color: #d1d5db; }
     .status-예약 { background-color: #0c4a6e; color: #7dd3fc; border-color: #0369a1; }
     .status-계약금 { background-color: #713f12; color: #fde047; border-color: #a16207; }
     .status-홀딩 { background-color: #4a044e; color: #f9a8d4; border-color: #a21caf; font-weight: bold; }
     .status-안치 { background-color: #1e293b; color: #94a3b8; border-color: #475569; font-weight: bold; }
-    .status-안치 .deceased-name { color: #cbd5e1; font-size: 0.75rem; font-weight: 600; } 
 
-    /* 입력창 공통 스타일 (시인성 검사 완료) */
+    /* 📅 달력 커스텀 스타일 */
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background-color: #333; border: 1px solid #333; }
+    .calendar-day { background-color: #1a1a1a; min-height: 80px; padding: 4px; transition: background 0.2s; cursor: pointer; }
+    .calendar-day:hover { background-color: #252525; }
+    .calendar-day.today { background-color: #1e2533; border: 1px solid #3b82f6; }
+    .event-dot { width: 4px; height: 4px; border-radius: 50%; }
+
     .jake-input {
       width: 100%; background-color: #111; color: #e5e7eb; border: 1px solid #444; 
-      border-radius: 0.375rem; padding: 0.5rem; outline: none; transition: border-color 0.2s;
+      border-radius: 0.375rem; padding: 0.5rem; outline: none; font-size: 0.875rem;
     }
-    .jake-input:focus { border-color: #3b82f6; }
-    .jake-input::placeholder { color: #6b7280; }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useMemo } = React;
 
     const SUPABASE_URL = 'https://lqccxnciiajwqdmpwjdv.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxY2N4bmNpaWFqd3FkbXB3amR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MjA3MTMsImV4cCI6MjA4NzA5NjcxM30.L23-eq-DIPsbONOeX-xQ8UcMb7gtgTTTRpkaSm9HTw4';
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    function KanbanBoard() {
-      const [projects, setProjects] = useState([]);
+    // ==========================================
+    // 1. 통합 일정 (Calendar) 모듈
+    // ==========================================
+    function CalendarView() {
+      const [events, setEvents] = useState([]);
+      const [currentDate, setCurrentDate] = useState(new Date());
       const [loading, setLoading] = useState(true);
 
       useEffect(() => {
-        async function fetchProjects() {
+        async function fetchAllEvents() {
           try {
-            const { data } = await supabase.from('projects').select('*').order('start_date', { ascending: false });
-            setProjects(data || []);
+            // 안치일정, 답사일정, 근태 동시 병렬 로드
+            const [interments, pipeline, attendance] = await Promise.all([
+              supabase.from('interments').select('scheduled_date, contractor, deceased_name'),
+              supabase.from('sales_pipeline').select('visit_date, customer_name, status'),
+              supabase.from('attendance').select('work_date, employee_name, status')
+            ]);
+
+            const merged = [
+              ...(interments.data || []).map(i => ({ date: i.scheduled_date, title: `⚱️ ${i.deceased_name}`, type: 'interment' })),
+              ...(pipeline.data || []).map(p => ({ date: p.visit_date, title: `🚗 ${p.customer_name}`, type: 'visit' })),
+              ...(attendance.data || []).map(a => ({ date: a.work_date, title: `👷 ${a.employee_name}`, type: 'work' }))
+            ].filter(e => e.date);
+
+            setEvents(merged);
           } finally { setLoading(false); }
         }
-        fetchProjects();
+        fetchAllEvents();
       }, []);
 
-      const columns = [
-        { id: '준비', title: '📝 준비', border: 'border-gray-500' },
-        { id: '진행중', title: '🚀 진행중', border: 'border-blue-500' },
-        { id: '보류', title: '⏸️ 보류', border: 'border-purple-600' },
-        { id: '완료', title: '✅ 완료', border: 'border-slate-500' }
-      ];
+      const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+      const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
+      
+      const renderDays = () => {
+        const days = [];
+        for (let i = 0; i < firstDayOfMonth; i++) days.push(<div key={`empty-${i}`} className="calendar-day opacity-20"></div>);
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+          const dayEvents = events.filter(e => e.date === dateStr);
+          const isToday = new Date().toISOString().split('T')[0] === dateStr;
 
-      if (loading) return <div className="p-8 text-center text-gray-500 animate-pulse">칸반 데이터 로딩 중...</div>;
+          days.push(
+            <div key={d} className={`calendar-day ${isToday ? 'today' : ''}`} onClick={() => dayEvents.length && alert(dayEvents.map(e => e.title).join('\n'))}>
+              <div className="text-xs font-bold mb-1">{d}</div>
+              <div className="space-y-1">
+                {dayEvents.slice(0, 3).map((e, idx) => (
+                  <div key={idx} className={`text-[9px] px-1 rounded truncate ${e.type === 'interment' ? 'bg-blue-900 text-blue-200' : e.type === 'visit' ? 'bg-purple-900 text-purple-200' : 'bg-gray-800 text-gray-400'}`}>
+                    {e.title}
+                  </div>
+                ))}
+                {dayEvents.length > 3 && <div className="text-[8px] text-gray-500">+{dayEvents.length - 3} more</div>}
+              </div>
+            </div>
+          );
+        }
+        return days;
+      };
+
+      if (loading) return <div className="p-8 text-center animate-pulse">일정 데이터 동기화 중...</div>;
 
       return (
-        <div className="flex gap-4 overflow-x-auto h-full pb-4 items-start">
-          {columns.map(col => {
-            const colProjects = projects.filter(p => p.status === col.id);
-            return (
-              <div key={col.id} className="kanban-col flex flex-col h-full glass-panel rounded-xl p-3 shrink-0">
-                <div className={`text-sm font-bold mb-3 flex justify-between items-center border-b-2 pb-2 ${col.border}`}>
-                  <span className="text-gray-300">{col.title}</span>
-                  <span className="bg-[#111] text-gray-400 px-2 py-0.5 rounded-full text-xs border border-[#333]">{colProjects.length}</span>
+        <div className="flex flex-col h-full glass-panel rounded-xl overflow-hidden">
+          <div className="p-4 flex justify-between items-center border-b border-[#333]">
+            <h2 className="font-bold">{currentDate.getFullYear()}년 {currentDate.getMonth() + 1}월</h2>
+            <div className="flex gap-2">
+              <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-1 hover:bg-[#333] rounded"><i className="ph ph-caret-left"></i></button>
+              <button onClick={() => setCurrentDate(new Date())} className="text-xs px-2 hover:bg-[#333] rounded">오늘</button>
+              <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-1 hover:bg-[#333] rounded"><i className="ph ph-caret-right"></i></button>
+            </div>
+          </div>
+          <div className="grid grid-cols-7 text-center text-[10px] font-bold py-2 bg-[#1a1a1a] border-b border-[#333] text-gray-500">
+            {['일','월','화','수','목','금','토'].map(d => <div key={d}>{d}</div>)}
+          </div>
+          <div className="calendar-grid flex-1 overflow-y-auto">
+            {renderDays()}
+          </div>
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 2. 각인 관리 (Engraving) 모듈
+    // ==========================================
+    function EngravingView() {
+      const [list, setList] = useState([]);
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        async function fetchEngravings() {
+          const { data } = await supabase.from('engravings').select('*').order('scheduled_date', { ascending: true });
+          setList(data || []);
+          setLoading(false);
+        }
+        fetchEngravings();
+      }, []);
+
+      if (loading) return <div className="p-8 text-center animate-pulse">각인 데이터 로딩 중...</div>;
+
+      return (
+        <div className="h-full glass-panel rounded-xl overflow-hidden flex flex-col">
+          <div className="p-4 border-b border-[#333] flex justify-between items-center">
+            <h2 className="font-bold">각인 작업 대기열</h2>
+            <span className="text-xs text-gray-500">총 {list.length}건</span>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {list.map(item => (
+              <div key={item.id} className="p-3 bg-[#1a1a1a] rounded-lg border border-[#333] flex justify-between items-center">
+                <div>
+                  <div className="text-xs text-blue-400 font-mono mb-1">{item.location}</div>
+                  <div className="font-bold text-sm text-gray-200">{item.deceased_name} <span className="text-xs font-normal text-gray-500">({item.contractor})</span></div>
+                  <div className="text-[10px] text-gray-500 mt-1 italic">{item.size_spec} | {item.religion}</div>
                 </div>
-                <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-                  {colProjects.map(p => (
-                    <div key={p.id} className="bg-[#1e1e1e] p-3 rounded-lg border border-[#333] shadow-sm hover:border-gray-500 cursor-pointer transition-colors border-l-4 border-l-gray-500">
-                      <div className="text-[10px] text-gray-500 mb-1 flex justify-between">
-                        <span>{p.id}</span>
-                        <span className={p.priority === '상' ? 'text-red-400 font-bold' : ''}>{p.priority}</span>
-                      </div>
-                      <div className="font-bold text-sm text-gray-300 mb-2 leading-tight">{p.title}</div>
-                      <div className="flex justify-between items-end text-xs text-gray-500">
-                        <span>{p.personnel || '담당미정'}</span>
-                        <span className="bg-[#111] px-1.5 py-0.5 rounded border border-[#333]">{p.end_date ? p.end_date.substring(5) : '-'}</span>
-                      </div>
-                    </div>
-                  ))}
+                <div className="text-right">
+                  <div className={`text-[10px] px-2 py-0.5 rounded-full mb-2 inline-block ${item.status === '완료' ? 'bg-gray-800 text-gray-500' : 'bg-blue-900 text-blue-200 font-bold'}`}>
+                    {item.status}
+                  </div>
+                  <div className="text-[10px] text-gray-400">{item.scheduled_date}</div>
                 </div>
               </div>
-            );
-          })}
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ==========================================
+    // [기존 모듈들: KanbanBoard, FieldMaster 유지]
+    // ==========================================
+    function KanbanBoard() {
+      const [projects, setProjects] = useState([]);
+      const [loading, setLoading] = useState(true);
+      useEffect(() => {
+        async function fetch() {
+          const { data } = await supabase.from('projects').select('*').order('start_date', { ascending: false });
+          setProjects(data || []);
+          setLoading(false);
+        }
+        fetch();
+      }, []);
+      if (loading) return <div className="p-8 text-center text-gray-500 animate-pulse">칸반 로딩 중...</div>;
+      const columns = [{ id: '준비', title: '📝 준비', border: 'border-gray-500' },{ id: '진행중', title: '🚀 진행중', border: 'border-blue-500' },{ id: '보류', title: '⏸️ 보류', border: 'border-purple-600' },{ id: '완료', title: '✅ 완료', border: 'border-slate-500' }];
+      return (
+        <div className="flex gap-4 overflow-x-auto h-full pb-4 items-start">
+          {columns.map(col => (
+            <div key={col.id} className="kanban-col flex flex-col h-full glass-panel rounded-xl p-3 shrink-0">
+              <div className={`text-sm font-bold mb-3 border-b-2 pb-2 ${col.border} text-gray-300`}>{col.title}</div>
+              <div className="flex-1 overflow-y-auto space-y-3">
+                {projects.filter(p => p.status === col.id).map(p => (
+                  <div key={p.id} className="bg-[#1e1e1e] p-3 rounded-lg border border-[#333] border-l-4 border-l-gray-500">
+                    <div className="text-[10px] text-gray-500 mb-1">{p.id}</div>
+                    <div className="font-bold text-sm text-gray-300">{p.title}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       );
     }
@@ -118,296 +225,121 @@
       const [sections, setSections] = useState([]);
       const [activeSection, setActiveSection] = useState('');
       const [loading, setLoading] = useState(true);
-      
-      // 모달 상태 관리
       const [isModalOpen, setIsModalOpen] = useState(false);
       const [selectedSlot, setSelectedSlot] = useState(null);
       const [editForm, setEditForm] = useState({});
       const [isSaving, setIsSaving] = useState(false);
 
-      const rowConfig = { 
-        'A2/가':[12], 'A3/가':[8,8], 'A4/가':[12,12,12,12,18,18,28,12], 
-        'A4/나':[9,11,7,8,8], 'A4/다':[6,6], 'A5/가':[13,14,14,13,13,15,11], 
-        'A5/나':[23,22,26,25,30,47,47,30,39], 'A6/가':[27,27,22,18,19,15,13], 
-        'A6/나':[25,26,26,26,26,26], 'C1/가':[13,17,21,25], 'B1/가':[20,23], 
-        'B2/가':[34,34,35,34,34], 'B3/가':[48,46,45,41], 'B4/가':[37,38,41,41,34], 
-        'B5/가':[47,47,49,48,40,32], 'B6/가/1-12':[47,52,53,52,53,53,54,54,54,53,55,54,50], 
-        'B6/가/13-14':[75,75,75,75,75,75,75,75,75] 
-      };
+      const rowConfig = { 'A2/가':[12], 'A3/가':[8,8], 'A4/가':[12,12,12,12,18,18,28,12], 'A4/나':[9,11,7,8,8], 'A4/다':[6,6], 'A5/가':[13,14,14,13,13,15,11], 'A5/나':[23,22,26,25,30,47,47,30,39], 'A6/가':[27,27,22,18,19,15,13], 'A6/나':[25,26,26,26,26,26], 'C1/가':[13,17,21,25], 'B1/가':[20,23], 'B2/가':[34,34,35,34,34], 'B3/가':[48,46,45,41], 'B4/가':[37,38,41,41,34], 'B5/가':[47,47,49,48,40,32], 'B6/가/1-12':[47,52,53,52,53,53,54,54,54,53,55,54,50], 'B6/가/13-14':[75,75,75,75,75,75,75,75,75] };
 
       useEffect(() => {
-        async function fetchLocations() {
-          try {
-            let allData = [];
-            let from = 0;
-            const step = 1000;
-            
-            while (true) {
-              const { data, error } = await supabase
-                .from('master_locations')
-                .select('*')
-                .range(from, from + step - 1);
-                
-              if (error) throw error;
-              if (data && data.length > 0) allData = [...allData, ...data];
-              if (!data || data.length < step) break; 
-              from += step;
-            }
-
-            if (allData.length > 0) {
-              setLocations(allData);
-              const uniqueSections = [...new Set(allData.map(item => item.section).filter(Boolean))]
-                .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-              
-              setSections(uniqueSections);
-              if (uniqueSections.length > 0) setActiveSection(uniqueSections[0]);
-            }
-          } catch (err) {
-            console.error(err);
-          } finally { 
-            setLoading(false); 
+        async function fetch() {
+          let allData = []; let from = 0; const step = 1000;
+          while (true) {
+            const { data, error } = await supabase.from('master_locations').select('*').range(from, from + step - 1);
+            if (error) break;
+            if (data) allData = [...allData, ...data];
+            if (!data || data.length < step) break;
+            from += step;
           }
+          if (allData.length > 0) {
+            setLocations(allData);
+            const sects = [...new Set(allData.map(i => i.section).filter(Boolean))].sort((a,b) => a.localeCompare(b, undefined, {numeric:true}));
+            setSections(sects);
+            if (sects.length > 0) setActiveSection(sects[0]);
+          }
+          setLoading(false);
         }
-        fetchLocations();
+        fetch();
       }, []);
 
-      // 모달 열기 로직
-      const openModal = (slotData) => {
-        setSelectedSlot(slotData);
-        setEditForm({ ...slotData }); // 현재 데이터 복사
-        setIsModalOpen(true);
-      };
-
-      // DB 업데이트 로직 (Zero-Failure)
       const handleSave = async () => {
         setIsSaving(true);
-        try {
-          // DB에 바로 업데이트
-          const { error } = await supabase
-            .from('master_locations')
-            .update({
-              status: editForm.status,
-              contractor: editForm.contractor,
-              deceased_name: editForm.deceased_name,
-              memo: editForm.memo
-            })
-            .eq('id', selectedSlot.id);
-            
-          if (error) throw error;
-
-          // 프론트엔드 화면 즉시 갱신 (새로고침 불필요)
-          setLocations(prev => prev.map(loc => loc.id === selectedSlot.id ? { ...loc, ...editForm } : loc));
+        const { error } = await supabase.from('master_locations').update({ status: editForm.status, contractor: editForm.contractor, deceased_name: editForm.deceased_name, memo: editForm.memo }).eq('id', selectedSlot.id);
+        if (!error) {
+          setLocations(prev => prev.map(l => l.id === selectedSlot.id ? { ...l, ...editForm } : l));
           setIsModalOpen(false);
-        } catch (err) {
-          alert('저장 중 오류가 발생했습니다: ' + err.message);
-        } finally {
-          setIsSaving(false);
         }
+        setIsSaving(false);
       };
 
-      if (loading) return <div className="p-8 text-center text-gray-500 animate-pulse">모든 수목 현장 데이터 로딩 중...</div>;
+      if (loading) return <div className="p-8 text-center text-gray-500 animate-pulse">현장 데이터 로딩 중...</div>;
 
-      const currentData = locations.filter(loc => loc.section === activeSection);
-      const layout = rowConfig[activeSection] || [20, 20]; 
-      
-      let currentIndex = 0;
-      const rows = [];
-
+      const currentData = locations.filter(l => l.section === activeSection);
+      const layout = rowConfig[activeSection] || [20];
+      let currentIndex = 0; const rows = [];
       layout.forEach((count, rIdx) => {
         if (currentIndex >= currentData.length) return;
-        
         const rowData = currentData.slice(currentIndex, currentIndex + count);
-        
         rows.push(
-          <div key={`row-${rIdx}`} className="row-container">
-            {rowData.map((item, idx) => {
-              if (item.id.includes('SPACER')) {
-                return <div key={`spacer-${idx}`} className="slot slot-spacer"></div>;
-              }
-              
-              return (
-                <div 
-                  key={item.id} 
-                  className={`slot status-${item.status || '미분양'}`}
-                  onClick={() => openModal(item)}
-                >
-                  <div className="font-mono text-[10px] opacity-70 mb-0.5 font-semibold">{item.slot_no}</div>
-                  <div className="deceased-name truncate w-full px-1">{item.deceased_name || ''}</div>
-                </div>
-              );
-            })}
+          <div key={rIdx} className="row-container">
+            {rowData.map(item => item.id.includes('SPACER') ? <div key={item.id} className="slot slot-spacer" /> : (
+              <div key={item.id} className={`slot status-${item.status || '미분양'}`} onClick={() => { setSelectedSlot(item); setEditForm({...item}); setIsModalOpen(true); }}>
+                <div className="font-mono text-[10px] opacity-70 mb-0.5">{item.slot_no}</div>
+                <div className="deceased-name truncate w-full px-1">{item.deceased_name || ''}</div>
+              </div>
+            ))}
           </div>
         );
         currentIndex += count;
       });
 
       return (
-        <div className="flex flex-col h-full glass-panel rounded-xl overflow-hidden border border-[#333] relative">
-          
-          {/* 구역 네비게이션 */}
+        <div className="flex flex-col h-full glass-panel rounded-xl overflow-hidden border border-[#333]">
           <div className="flex overflow-x-auto bg-[#1a1a1a] p-2 gap-2 border-b border-[#333] shrink-0">
-            {sections.map(sec => (
-              <button 
-                key={sec} 
-                onClick={() => setActiveSection(sec)}
-                className={`px-4 py-1.5 rounded-md text-sm font-bold whitespace-nowrap transition-colors ${activeSection === sec ? 'bg-[#333] text-gray-200 border border-[#555] shadow-lg' : 'bg-transparent text-gray-500 hover:text-gray-300 border border-transparent'}`}
-              >
-                {sec}
-              </button>
-            ))}
+            {sections.map(s => <button key={s} onClick={() => setActiveSection(s)} className={`px-4 py-1.5 rounded-md text-sm font-bold whitespace-nowrap ${activeSection === s ? 'bg-[#333] text-gray-200 border border-[#555]' : 'text-gray-500'}`}>{s}</button>)}
           </div>
-
-          {/* 지도 렌더링 영역 */}
-          <div className="flex-1 overflow-auto p-4 bg-[#111]">
-            <div className="w-max pb-10">
-              {rows.length > 0 ? rows : <div className="text-gray-600">이 구역의 데이터가 없습니다.</div>}
-            </div>
-          </div>
-
-          {/* 🗔 모달 (Z폴드6 모바일 최적화) */}
+          <div className="flex-1 overflow-auto p-4 bg-[#111]"><div className="w-max pb-10">{rows}</div></div>
           {isModalOpen && (
-            <div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4">
-              <div className="bg-[#1e1e1e] border border-[#444] rounded-xl w-full max-w-md max-h-[85vh] flex flex-col shadow-2xl">
-                
-                {/* 모달 헤더 */}
-                <div className="flex justify-between items-center p-4 border-b border-[#333] shrink-0">
-                  <div>
-                    <h3 className="text-lg font-bold text-white leading-tight">상세 정보 수정</h3>
-                    <p className="text-xs text-blue-400 font-mono mt-0.5">{selectedSlot.section} {selectedSlot.slot_no}</p>
-                  </div>
-                  <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white transition-colors">
-                    <i className="ph ph-x text-2xl"></i>
-                  </button>
-                </div>
-
-                {/* 모달 바디 (스크롤 영역) */}
-                <div className="flex-1 overflow-y-auto p-5 space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">진행 상태</label>
-                    <select 
-                      value={editForm.status || '미분양'} 
-                      onChange={e => setEditForm({...editForm, status: e.target.value})}
-                      className="jake-input cursor-pointer"
-                    >
-                      <option value="미분양">미분양</option>
-                      <option value="예약">예약</option>
-                      <option value="계약금">계약금</option>
-                      <option value="홀딩">홀딩</option>
-                      <option value="안치">안치</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">계약자명</label>
-                    <input 
-                      type="text" 
-                      value={editForm.contractor || ''} 
-                      onChange={e => setEditForm({...editForm, contractor: e.target.value})}
-                      placeholder="계약자 이름을 입력하세요"
-                      className="jake-input"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">고인명</label>
-                    <input 
-                      type="text" 
-                      value={editForm.deceased_name || ''} 
-                      onChange={e => setEditForm({...editForm, deceased_name: e.target.value})}
-                      placeholder="안치될 고인명을 입력하세요"
-                      className="jake-input"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">현장 메모</label>
-                    <textarea 
-                      value={editForm.memo || ''} 
-                      onChange={e => setEditForm({...editForm, memo: e.target.value})}
-                      placeholder="특이사항을 입력하세요 (예: 가족목 변경 예정)"
-                      className="jake-input h-24 resize-none"
-                    ></textarea>
-                  </div>
-                </div>
-
-                {/* 모달 푸터 */}
-                <div className="p-4 border-t border-[#333] flex justify-end gap-3 shrink-0 bg-[#1a1a1a] rounded-b-xl">
-                  <button 
-                    onClick={() => setIsModalOpen(false)}
-                    className="px-4 py-2 rounded-lg text-sm font-bold text-gray-400 hover:bg-[#333] transition-colors"
-                  >
-                    취소
-                  </button>
-                  <button 
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    className="px-6 py-2 rounded-lg text-sm font-bold bg-blue-600 text-white hover:bg-blue-500 transition-colors disabled:opacity-50 flex items-center gap-2"
-                  >
-                    {isSaving ? <i className="ph ph-spinner animate-spin"></i> : <i className="ph ph-floppy-disk"></i>}
-                    {isSaving ? '저장 중...' : '저장'}
-                  </button>
-                </div>
-
+            <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+              <div className="bg-[#1e1e1e] border border-[#444] rounded-xl w-full max-w-md max-h-[85vh] flex flex-col p-5 space-y-4">
+                <div className="flex justify-between items-center"><h3 className="font-bold text-white">상세 수정</h3><button onClick={() => setIsModalOpen(false)}><i className="ph ph-x text-2xl" /></button></div>
+                <select value={editForm.status} onChange={e => setEditForm({...editForm, status:e.target.value})} className="jake-input"><option value="미분양">미분양</option><option value="예약">예약</option><option value="계약금">계약금</option><option value="홀딩">홀딩</option><option value="안치">안치</option></select>
+                <input type="text" value={editForm.contractor || ''} onChange={e => setEditForm({...editForm, contractor:e.target.value})} placeholder="계약자" className="jake-input" />
+                <input type="text" value={editForm.deceased_name || ''} onChange={e => setEditForm({...editForm, deceased_name:e.target.value})} placeholder="고인명" className="jake-input" />
+                <textarea value={editForm.memo || ''} onChange={e => setEditForm({...editForm, memo:e.target.value})} placeholder="메모" className="jake-input h-20" />
+                <button onClick={handleSave} disabled={isSaving} className="w-full bg-blue-600 py-3 rounded-lg font-bold text-white">{isSaving ? '저장 중...' : '저장하기'}</button>
               </div>
             </div>
           )}
-
         </div>
       );
     }
 
+    // ==========================================
+    // 3. 메인 App Shell
+    // ==========================================
     function App() {
       const [currentTab, setCurrentTab] = useState('field');
       const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
       const navItems = [
-        { id: 'project', icon: 'ph-kanban', label: '프로젝트 (Work)' },
-        { id: 'field', icon: 'ph-map-trifold', label: '현장 마스터 (공유)' },
+        { id: 'field', icon: 'ph-map-trifold', label: '현장 마스터' },
+        { id: 'project', icon: 'ph-kanban', label: '프로젝트' },
         { id: 'calendar', icon: 'ph-calendar-check', label: '통합 일정' },
         { id: 'engraving', icon: 'ph-hammer', label: '각인 관리' },
       ];
 
       return (
         <div className="flex h-screen bg-[#121212] overflow-hidden">
-          {isSidebarOpen && <div className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden" onClick={() => setIsSidebarOpen(false)}></div>}
-
-          <aside className={`fixed md:static inset-y-0 left-0 z-50 w-64 glass-panel border-r border-[#333] transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-200 ease-in-out flex flex-col`}>
-            <div className="p-5 flex justify-between items-center border-b border-[#333]">
-              <h1 className="text-xl font-extrabold text-gray-200 tracking-tight">Jake<span className="text-blue-500">OS</span></h1>
-              <button className="md:hidden text-gray-500 hover:text-gray-300" onClick={() => setIsSidebarOpen(false)}><i className="ph ph-x text-2xl"></i></button>
-            </div>
-            
+          {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setIsSidebarOpen(false)} />}
+          <aside className={`fixed md:static inset-y-0 left-0 z-50 w-64 glass-panel border-r border-[#333] transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-200 flex flex-col`}>
+            <div className="p-5 border-b border-[#333] flex justify-between items-center"><h1 className="text-xl font-extrabold text-gray-200">Jake<span className="text-blue-500">OS</span></h1></div>
             <nav className="flex-1 p-4 space-y-2">
-              <div className="text-xs font-bold text-gray-600 mb-2 px-2">MODULES</div>
               {navItems.map(item => (
-                <button
-                  key={item.id}
-                  onClick={() => { setCurrentTab(item.id); setIsSidebarOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${currentTab === item.id ? 'bg-[#222] text-gray-300 border border-[#444]' : 'text-gray-500 hover:bg-[#1a1a1a] hover:text-gray-300 border border-transparent'}`}
-                >
+                <button key={item.id} onClick={() => { setCurrentTab(item.id); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${currentTab === item.id ? 'bg-[#222] text-gray-200 border border-[#444]' : 'text-gray-500 hover:text-gray-300'}`}>
                   <i className={`ph ${item.icon} text-lg`}></i> {item.label}
                 </button>
               ))}
             </nav>
           </aside>
-
           <main className="flex-1 flex flex-col min-w-0">
-            <header className="md:hidden flex items-center justify-between p-4 glass-panel border-b border-[#333] z-30">
-              <button className="text-gray-500" onClick={() => setIsSidebarOpen(true)}><i className="ph ph-list text-2xl"></i></button>
-              <span className="font-bold text-gray-300 text-sm">{navItems.find(i => i.id === currentTab)?.label}</span>
-              <div className="w-6"></div>
-            </header>
-
+            <header className="md:hidden flex items-center justify-between p-4 glass-panel border-b border-[#333]"><button onClick={() => setIsSidebarOpen(true)}><i className="ph ph-list text-2xl" /></button><span className="font-bold text-gray-300">{navItems.find(i => i.id === currentTab)?.label}</span><div className="w-6"/></header>
             <div className="flex-1 p-4 md:p-6 overflow-hidden">
-              {currentTab === 'project' && <KanbanBoard />}
               {currentTab === 'field' && <FieldMaster />}
-              
-              {(currentTab !== 'project' && currentTab !== 'field') && (
-                <div className="h-full flex flex-col items-center justify-center text-gray-600 border-2 border-dashed border-[#333] rounded-xl">
-                  <i className={`ph ${navItems.find(i => i.id === currentTab)?.icon} text-4xl mb-2`}></i>
-                  <p className="text-sm">해당 모듈은 조립 대기 중입니다.</p>
-                </div>
-              )}
+              {currentTab === 'project' && <KanbanBoard />}
+              {currentTab === 'calendar' && <CalendarView />}
+              {currentTab === 'engraving' && <EngravingView />}
             </div>
           </main>
         </div>
