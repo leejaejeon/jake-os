@@ -22,9 +22,9 @@
     .status-안치 { background-color: #14532d; color: #dcfce7; border-color: #166534; font-weight: bold; }
     .status-홀딩 { background-color: #7c2d12; color: #ffedd5; border-color: #9a3412; }
 
-    /* 🎨 각인 상태 뱃지 (4단계 고정) */
+    /* 🎨 각인 관리 뱃지 색상 (Jake 지정) */
     .eng-badge { padding: 4px 8px; border-radius: 6px; font-weight: 900; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-width: 1px; cursor: pointer;}
-    .eng-접수 { background-color: #451a1a; color: #fca5a5; border-color: #991b1b; }
+    .eng-접수 { background-color: #3f1d1d; color: #fca5a5; border-color: #991b1b; }
     .eng-디자인완료 { background-color: #1e3a8a; color: #93c5fd; border-color: #2563eb; }
     .eng-각인완료 { background-color: #713f12; color: #fde047; border-color: #ca8a04; }
     .eng-설치완료 { background-color: #111; color: #666; border-color: #333; opacity: 0.8; }
@@ -40,8 +40,9 @@
     .slot:active { transform: scale(0.95); }
     .slot-spacer { visibility: hidden; width: 82px; }
 
-    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: minmax(130px, auto); gap: 1px; background-color: #222; }
-    .calendar-day { background-color: #111; padding: 6px; cursor: pointer; transition: background 0.1s; display: flex; flex-direction: column;}
+    /* 🚨 달력 그리드 최소 높이 강제 및 넘침 방지 */
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: 1fr; gap: 1px; background-color: #222; flex: 1; min-height: 0; }
+    .calendar-day { background-color: #111; padding: 6px; cursor: pointer; transition: background 0.1s; display: flex; flex-direction: column; overflow: hidden; }
     .calendar-day:hover { background-color: #1a1a1a; }
     .calendar-day.today { border: 2px solid #facc15; background-color: #1a1e1a; }
     
@@ -57,7 +58,7 @@
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxY2N4bmNpaWFqd3FkbXB3amR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MjA3MTMsImV4cCI6MjA4NzA5NjcxM30.L23-eq-DIPsbONOeX-xQ8UcMb7gtgTTTRpkaSm9HTw4';
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // 🚨 절대 서열 정리
+    // 🚨 절대 서열 정리기
     const getEngPriority = (status) => {
       const s = String(status || '').trim();
       if (s === '접수') return 0;
@@ -75,14 +76,14 @@
       return 'eng-접수';
     };
 
-    // 🚨 안전한 날짜 변환 함수 (NaN 에러 방어벽 및 오름차순 적용 위한 처리)
+    // 🚨 날짜 파싱 안전장치 (2099년 부여로 빈칸 데이터 하단 밀어내기)
     const getSafeTime = (dateStr) => {
-      if (!dateStr) return new Date('2099-12-31').getTime();
+      if (!dateStr || dateStr.trim() === '') return new Date('2099-12-31').getTime();
       const t = new Date(dateStr).getTime();
       return isNaN(t) ? new Date('2099-12-31').getTime() : t;
     };
 
-    // [1. 통합 검색]
+    // [1. 탭 연동형 통합 검색]
     function GlobalSearch({ onSelectResult, currentTab }) {
       const [query, setQuery] = useState('');
       const [results, setResults] = useState([]);
@@ -227,7 +228,7 @@
         if (highlightItem) setEditingItem(highlightItem);
       }, [highlightItem]);
 
-      // 🚨 절대 정렬 알고리즘 (오름차순)
+      // 🚨 절대 정렬 알고리즘 (오선하 증발 해결)
       const sortedFolders = useMemo(() => {
         const valid = rawList.filter(i => i.deceased_name && String(i.deceased_name).trim() !== '' && i.deceased_name !== '.');
 
@@ -243,7 +244,8 @@
             const pA = getEngPriority(a.status);
             const pB = getEngPriority(b.status);
             if (pA !== pB) return pA - pB;
-            // 🚨 오름차순: 임박한(가까운) 날짜가 위로 오도록 변경
+            
+            // 🚨 오름차순: 오래된 날짜(임박/과거)가 최상단, 없는 날짜(2099)는 맨 밑
             return getSafeTime(a.scheduled_date) - getSafeTime(b.scheduled_date); 
           });
           return { cNo, items };
@@ -294,8 +296,7 @@
                     <details key={folderInfo.cNo} className="bg-[#111] rounded-xl overflow-hidden border border-[#222] shadow-lg group">
                       <summary className="bg-[#1a1a1a] hover:bg-[#222] px-5 py-4 flex justify-between items-center transition-colors">
                         <div className="flex items-center gap-3">
-                          <i className="ph ph-folder-open text-blue-500 text-xl group-open:block hidden"></i>
-                          <i className="ph ph-folder text-blue-500 text-xl group-open:hidden block"></i>
+                          <i className="ph ph-folder text-blue-500 text-xl group-open:text-blue-400"></i>
                           <h3 className="text-sm font-black text-white">
                             {folderTitle} <span className="text-blue-400 font-bold ml-1">({contractor})</span>
                             <span className="text-gray-500 font-medium ml-2 hidden md:inline-block">- {deceasedNames}</span>
@@ -359,7 +360,7 @@
         days.push(
           <div key={d} className={`calendar-day border border-[#333] ${new Date().toISOString().startsWith(dateStr) ? 'today' : ''}`}>
             <div className="text-xs font-bold text-gray-500 mb-1">{d}</div>
-            <div className="flex flex-col gap-1 overflow-y-auto max-h-[85px] pr-1">
+            <div className="flex flex-col gap-1 overflow-y-auto h-full pr-1 custom-scrollbar">
               {dayItems.map(i => {
                 const statusName = getEngPriority(i.status) === 0 ? '접수' : getEngPriority(i.status) === 1 ? '디자인' : getEngPriority(i.status) === 2 ? '각인' : '설치';
                 return (
@@ -388,7 +389,7 @@
       );
     }
 
-    // [3. 통합 일정 (팝업 아코디언 추가)]
+    // [3. 통합 일정 (팝업 아코디언 추가 및 다중 테이블 연동)]
     function CalendarView() {
       const [events, setEvents] = useState([]);
       const [loading, setLoading] = useState(true);
@@ -399,15 +400,20 @@
       useEffect(() => {
         async function fetchAll() {
           try {
+            // 통합일정은 각인, 안치, 답사 등 여러 곳에서 모아옴
             const { data: engs } = await supabase.from('engravings').select('*');
+            const { data: inter } = await supabase.from('interments').select('*');
+            const { data: pipe } = await supabase.from('sales_pipeline').select('*');
+            
             let merged = [];
             if (engs) {
-              merged = [...merged, ...engs.filter(i=>i.scheduled_date).map(i => ({ 
-                date: i.scheduled_date, 
-                title: `${i.deceased_name} (${i.location})`, 
-                type: '안치', 
-                memo: i.memo 
-              }))];
+              merged = [...merged, ...engs.filter(i=>i.scheduled_date).map(i => ({ date: i.scheduled_date, title: `${i.deceased_name}(각인)`, type: '각인', memo: i.memo }))];
+            }
+            if (inter) {
+              merged = [...merged, ...inter.filter(i=>i.scheduled_date).map(i => ({ date: i.scheduled_date, title: `${i.deceased_name}(안치)`, type: '안치', memo: i.memo }))];
+            }
+            if (pipe) {
+              merged = [...merged, ...pipe.filter(p=>p.visit_date).map(p => ({ date: p.visit_date, title: `${p.customer_name}(답사)`, type: '답사', memo: p.memo }))];
             }
             setEvents(merged);
           } catch (error) {
@@ -423,7 +429,7 @@
       const todayStr = new Date().toISOString().split('T')[0];
       const todayInterments = events.filter(e => e.date === todayStr && e.type === '안치').length;
       const todayVisits = events.filter(e => e.date === todayStr && e.type === '답사').length;
-      const todayLeaves = 0; 
+      const todayEngravings = events.filter(e => e.date === todayStr && e.type === '각인').length;
 
       const days = [];
       const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
@@ -436,9 +442,9 @@
         days.push(
           <div key={d} className={`calendar-day border border-gray-800/30 ${dateStr === todayStr ? 'today' : ''}`} onClick={() => { setSelectedDate(dateStr); setIsModalOpen(true); }}>
             <div className="text-xs font-bold text-gray-500 mb-1">{d}</div>
-            <div className="space-y-1 h-[80px] overflow-y-auto">
+            <div className="flex flex-col gap-1 overflow-y-auto h-full pr-1 custom-scrollbar">
               {dayEvents.map((e, idx) => (
-                <div key={idx} className={`text-[10px] px-1.5 py-1 rounded truncate border font-bold ${e.type === '안치' ? 'bg-green-900/40 text-green-300 border-green-800' : 'bg-yellow-900/40 text-yellow-300 border-yellow-800'}`}>
+                <div key={idx} className={`text-[10px] px-1.5 py-1 rounded truncate border font-bold ${e.type === '안치' ? 'bg-green-900/40 text-green-300 border-green-800' : e.type === '답사' ? 'bg-yellow-900/40 text-yellow-300 border-yellow-800' : 'bg-blue-900/40 text-blue-300 border-blue-800'}`}>
                   {e.type[0]} {e.title}
                 </div>
               ))}
@@ -456,7 +462,7 @@
             <div className="w-px bg-[#333]"></div>
             <div className="flex flex-col"><span className="text-xs text-gray-500 font-bold uppercase tracking-widest">오늘 답사</span><span className="text-xl font-black text-yellow-400">{todayVisits}건</span></div>
             <div className="w-px bg-[#333]"></div>
-            <div className="flex flex-col"><span className="text-xs text-gray-500 font-bold uppercase tracking-widest">오늘 휴무</span><span className="text-xl font-black text-blue-400">{todayLeaves}건</span></div>
+            <div className="flex flex-col"><span className="text-xs text-gray-500 font-bold uppercase tracking-widest">오늘 각인</span><span className="text-xl font-black text-blue-400">{todayEngravings}건</span></div>
           </div>
 
           <div className="h-full glass-panel rounded-3xl overflow-hidden flex flex-col border border-[#222]">
@@ -471,7 +477,7 @@
             <div className="grid grid-cols-7 text-center text-[11px] py-3 bg-[#000] text-gray-600 font-bold border-b border-[#222] tracking-widest">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=> <div key={d}>{d}</div>)}</div>
             <div className="calendar-grid flex-1 overflow-y-auto">{days}</div>
 
-            {/* 🚨 통합일정 팝업 - 세부사항 아코디언 적용 */}
+            {/* 🚨 통합일정 팝업 - 세부사항 네이티브 아코디언 적용 */}
             {isModalOpen && (
               <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" onClick={() => setIsModalOpen(false)}>
                 <div className="bg-[#1a1a1a] border border-[#333] rounded-[2.5rem] w-full max-w-md p-10 shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -482,10 +488,10 @@
                   <div className="space-y-4 max-h-80 overflow-y-auto pr-2">
                     {selectedDayEvents.length === 0 ? <p className="text-gray-600 text-center py-10 font-bold bg-[#111] rounded-2xl">등록된 일정이 없습니다.</p> : 
                       selectedDayEvents.map((e, i) => (
-                        <details key={i} className={`group p-5 rounded-2xl border bg-[#0a0a0a] ${e.type === '안치' ? 'border-green-800/50' : 'border-yellow-800/50'} cursor-pointer`}>
+                        <details key={i} className={`group p-5 rounded-2xl border bg-[#0a0a0a] ${e.type === '안치' ? 'border-green-800/50' : e.type === '답사' ? 'border-yellow-800/50' : 'border-blue-800/50'}`}>
                           <summary className="font-black text-white flex justify-between items-center outline-none">
                             <div className="flex items-center gap-3">
-                              <span className={`text-[10px] font-black px-2 py-1 rounded-md ${e.type === '안치' ? 'bg-green-700 text-white' : 'bg-yellow-600 text-black'}`}>{e.type}</span>
+                              <span className={`text-[10px] font-black px-2 py-1 rounded-md ${e.type === '안치' ? 'bg-green-700 text-white' : e.type === '답사' ? 'bg-yellow-600 text-black' : 'bg-blue-600 text-white'}`}>{e.type}</span>
                               <span className="text-base tracking-tight truncate">{e.title}</span>
                             </div>
                             <i className="ph ph-caret-down text-gray-500 group-open:rotate-180 transition-transform"></i>
@@ -506,7 +512,7 @@
       );
     }
 
-    // [4. 현장 마스터 - 정보 팝업 (계약번호, 기수, 분양가, 관리비 등)]
+    // [4. 현장 마스터 - 정보 풀스펙 (계약번호, 기수, 분양가, 관리비 등)]
     function FieldMaster({ highlightId }) {
       const [locations, setLocations] = useState([]); const [sections, setSections] = useState([]); const [activeSection, setActiveSection] = useState(''); const [loading, setLoading] = useState(true);
       const [isModalOpen, setIsModalOpen] = useState(false); const [selectedSlot, setSelectedSlot] = useState(null);
@@ -572,7 +578,7 @@
           </div>
           <div className="flex-1 overflow-auto p-8 bg-[#000]"><div className="w-max pb-32">{rows}</div></div>
           
-          {/* 🚨 현장 마스터 전용 모달 (계약번호, 기수, 분양가, 관리비 등) */}
+          {/* 🚨 현장 마스터 전용 모달 (계약번호, 기수, 분양가, 관리비 등 풀스펙) */}
           {isModalOpen && selectedSlot && (
             <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" onClick={() => setIsModalOpen(false)}>
               <div className="bg-[#1a1a1a] border border-[#333] rounded-[2.5rem] w-full max-w-2xl p-10 shadow-2xl" onClick={e => e.stopPropagation()}>
