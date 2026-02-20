@@ -22,9 +22,9 @@
     .status-안치 { background-color: #14532d; color: #dcfce7; border-color: #166534; font-weight: bold; }
     .status-홀딩 { background-color: #7c2d12; color: #ffedd5; border-color: #9a3412; }
 
-    /* 🎨 각인 관리 뱃지 색상 (Jake 지정) */
+    /* 🎨 각인 상태 뱃지 (4단계 고정) */
     .eng-badge { padding: 4px 8px; border-radius: 6px; font-weight: 900; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-width: 1px; cursor: pointer;}
-    .eng-접수 { background-color: #3f1d1d; color: #fca5a5; border-color: #991b1b; }
+    .eng-접수 { background-color: #451a1a; color: #fca5a5; border-color: #991b1b; }
     .eng-디자인완료 { background-color: #1e3a8a; color: #93c5fd; border-color: #2563eb; }
     .eng-각인완료 { background-color: #713f12; color: #fde047; border-color: #ca8a04; }
     .eng-설치완료 { background-color: #111; color: #666; border-color: #333; opacity: 0.8; }
@@ -40,9 +40,9 @@
     .slot:active { transform: scale(0.95); }
     .slot-spacer { visibility: hidden; width: 82px; }
 
-    /* 🚨 달력 그리드 최소 높이 강제 및 넘침 방지 */
-    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: 1fr; gap: 1px; background-color: #222; flex: 1; min-height: 0; }
-    .calendar-day { background-color: #111; padding: 6px; cursor: pointer; transition: background 0.1s; display: flex; flex-direction: column; overflow: hidden; }
+    /* 🚨 달력 그리드 최소 높이 강제 (찌그러짐 방지) */
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: minmax(130px, auto); gap: 1px; background-color: #222; }
+    .calendar-day { background-color: #111; padding: 6px; cursor: pointer; transition: background 0.1s; display: flex; flex-direction: column;}
     .calendar-day:hover { background-color: #1a1a1a; }
     .calendar-day.today { border: 2px solid #facc15; background-color: #1a1e1a; }
     
@@ -58,7 +58,7 @@
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxY2N4bmNpaWFqd3FkbXB3amR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MjA3MTMsImV4cCI6MjA4NzA5NjcxM30.L23-eq-DIPsbONOeX-xQ8UcMb7gtgTTTRpkaSm9HTw4';
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // 🚨 절대 서열 정리기
+    // 🚨 절대 서열 정리 (오선하 1순위 노출 보장)
     const getEngPriority = (status) => {
       const s = String(status || '').trim();
       if (s === '접수') return 0;
@@ -76,14 +76,14 @@
       return 'eng-접수';
     };
 
-    // 🚨 날짜 파싱 안전장치 (2099년 부여로 빈칸 데이터 하단 밀어내기)
+    // 🚨 안전한 날짜 변환 함수 (빈칸은 1970년으로 보내서 맨 밑바닥으로 내림)
     const getSafeTime = (dateStr) => {
-      if (!dateStr || dateStr.trim() === '') return new Date('2099-12-31').getTime();
+      if (!dateStr || dateStr.trim() === '') return 0; // 1970-01-01
       const t = new Date(dateStr).getTime();
-      return isNaN(t) ? new Date('2099-12-31').getTime() : t;
+      return isNaN(t) ? 0 : t;
     };
 
-    // [1. 탭 연동형 통합 검색]
+    // [1. 통합 검색]
     function GlobalSearch({ onSelectResult, currentTab }) {
       const [query, setQuery] = useState('');
       const [results, setResults] = useState([]);
@@ -146,27 +146,29 @@
                 <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">고인명</label><input name="deceased_name" value={formData.deceased_name || ''} onChange={handleChange} className="jake-input" /></div>
                 <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">안치일정</label><input type="date" name="scheduled_date" value={formData.scheduled_date || ''} onChange={handleChange} className="jake-input" /></div>
                 
-                {/* 🚨 규격 및 종교 드롭다운화 */}
+                {/* 🚨 규격 및 종교 Datalist 적용 (기존 데이터 완벽 보존 + 드롭다운 지원) */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-gray-500 uppercase">규격</label>
-                  <select name="size_spec" value={formData.size_spec || ''} onChange={handleChange} className="jake-input cursor-pointer">
-                    <option value="">직접입력(아래 메모활용)</option>
-                    <option value="160*100">160*100</option>
-                    <option value="130*80">130*80</option>
-                    <option value="100*62">100*62</option>
-                  </select>
+                  <input name="size_spec" list="sizeList" value={formData.size_spec || ''} onChange={handleChange} className="jake-input cursor-pointer" placeholder="직접 입력 또는 선택" />
+                  <datalist id="sizeList">
+                    <option value="160*100" />
+                    <option value="130*80" />
+                    <option value="100*62" />
+                  </datalist>
                 </div>
+                
                 <div className="space-y-1 col-span-2">
                   <label className="text-[10px] font-black text-gray-500 uppercase">종교 / 특이사항</label>
-                  <select name="religion" value={formData.religion || ''} onChange={handleChange} className="jake-input cursor-pointer">
-                    <option value="">직접입력(아래 메모활용)</option>
-                    <option value="기본">기본 (추가없음)</option>
-                    <option value="사용자 요청 디자인">사용자 요청 디자인</option>
-                    <option value="교회직분 추가">교회직분 추가 (집사/권사 등)</option>
-                    <option value="세례명 추가">세례명 추가</option>
-                    <option value="불교 만자 추가">불교 만자 추가</option>
-                  </select>
+                  <input name="religion" list="relList" value={formData.religion || ''} onChange={handleChange} className="jake-input cursor-pointer" placeholder="직접 입력 또는 선택" />
+                  <datalist id="relList">
+                    <option value="기본" />
+                    <option value="사용자 요청 디자인" />
+                    <option value="교회직분 추가" />
+                    <option value="세례명 추가" />
+                    <option value="불교 만자 추가" />
+                  </datalist>
                 </div>
+                
                 <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">위치 정보 (동/구역/번호)</label><input name="location" value={formData.location || ''} onChange={handleChange} className="jake-input text-blue-400" /></div>
               </div>
 
@@ -228,7 +230,7 @@
         if (highlightItem) setEditingItem(highlightItem);
       }, [highlightItem]);
 
-      // 🚨 절대 정렬 알고리즘 (오선하 증발 해결)
+      // 🚨 절대 정렬 알고리즘 (오선하 증발 완벽 해결)
       const sortedFolders = useMemo(() => {
         const valid = rawList.filter(i => i.deceased_name && String(i.deceased_name).trim() !== '' && i.deceased_name !== '.');
 
@@ -245,8 +247,8 @@
             const pB = getEngPriority(b.status);
             if (pA !== pB) return pA - pB;
             
-            // 🚨 오름차순: 오래된 날짜(임박/과거)가 최상단, 없는 날짜(2099)는 맨 밑
-            return getSafeTime(a.scheduled_date) - getSafeTime(b.scheduled_date); 
+            // 미래 날짜가 상단으로 오도록 내림차순(b - a). 빈 날짜는 0이므로 맨 아래로.
+            return getSafeTime(b.scheduled_date) - getSafeTime(a.scheduled_date); 
           });
           return { cNo, items };
         });
@@ -256,9 +258,9 @@
           const pB = Math.min(...folderB.items.map(i => getEngPriority(i.status)));
           if (pA !== pB) return pA - pB; 
           
-          const dateA = Math.min(...folderA.items.filter(i => getEngPriority(i.status) === pA).map(i => getSafeTime(i.scheduled_date)));
-          const dateB = Math.min(...folderB.items.filter(i => getEngPriority(i.status) === pB).map(i => getSafeTime(i.scheduled_date)));
-          return dateA - dateB;
+          const dateA = Math.max(...folderA.items.filter(i => getEngPriority(i.status) === pA).map(i => getSafeTime(i.scheduled_date)));
+          const dateB = Math.max(...folderB.items.filter(i => getEngPriority(i.status) === pB).map(i => getSafeTime(i.scheduled_date)));
+          return dateB - dateA; // 미래 날짜 폴더가 상단
         });
 
         return folderArray;
@@ -365,7 +367,7 @@
                 const statusName = getEngPriority(i.status) === 0 ? '접수' : getEngPriority(i.status) === 1 ? '디자인' : getEngPriority(i.status) === 2 ? '각인' : '설치';
                 return (
                   <div key={i.id} onClick={(e) => { e.stopPropagation(); onSelect(i); }} className={`eng-badge ${getEngClass(i.status)}`}>
-                    {i.deceased_name} <span className="opacity-70 font-normal">({statusName})</span>
+                    {i.deceased_name} <span className="opacity-70 font-normal ml-1">({statusName})</span>
                   </div>
                 );
               })}
@@ -389,9 +391,10 @@
       );
     }
 
-    // [3. 통합 일정 (팝업 아코디언 추가 및 다중 테이블 연동)]
+    // [3. 통합 일정 (각인 제외 및 중앙정렬 대시보드)]
     function CalendarView() {
       const [events, setEvents] = useState([]);
+      const [dashCounts, setDashCounts] = useState({ inter: 0, visit: 0, eng: 0 });
       const [loading, setLoading] = useState(true);
       const [currentDate, setCurrentDate] = useState(new Date());
       const [selectedDate, setSelectedDate] = useState(null);
@@ -400,24 +403,25 @@
       useEffect(() => {
         async function fetchAll() {
           try {
-            // 통합일정은 각인, 안치, 답사 등 여러 곳에서 모아옴
-            const { data: engs } = await supabase.from('engravings').select('*');
+            // 통합일정 달력에는 안치/답사만 (각인 제외)
             const { data: inter } = await supabase.from('interments').select('*');
             const { data: pipe } = await supabase.from('sales_pipeline').select('*');
+            const { data: engs } = await supabase.from('engravings').select('*'); // 각인은 대시보드 카운트용으로만 호출
             
             let merged = [];
-            if (engs) {
-              merged = [...merged, ...engs.filter(i=>i.scheduled_date).map(i => ({ date: i.scheduled_date, title: `${i.deceased_name}(각인)`, type: '각인', memo: i.memo }))];
-            }
-            if (inter) {
-              merged = [...merged, ...inter.filter(i=>i.scheduled_date).map(i => ({ date: i.scheduled_date, title: `${i.deceased_name}(안치)`, type: '안치', memo: i.memo }))];
-            }
-            if (pipe) {
-              merged = [...merged, ...pipe.filter(p=>p.visit_date).map(p => ({ date: p.visit_date, title: `${p.customer_name}(답사)`, type: '답사', memo: p.memo }))];
-            }
+            if (inter) merged = [...merged, ...inter.filter(i=>i.scheduled_date).map(i => ({ date: i.scheduled_date, title: `${i.deceased_name}(안치)`, type: '안치', memo: i.memo }))];
+            if (pipe) merged = [...merged, ...pipe.filter(p=>p.visit_date).map(p => ({ date: p.visit_date, title: `${p.customer_name}(답사)`, type: '답사', memo: p.memo }))];
+            
             setEvents(merged);
+
+            const todayStr = new Date().toISOString().split('T')[0];
+            const tInter = inter ? inter.filter(i => i.scheduled_date === todayStr).length : 0;
+            const tVisit = pipe ? pipe.filter(p => p.visit_date === todayStr).length : 0;
+            const tEng = engs ? engs.filter(e => e.scheduled_date === todayStr).length : 0;
+            setDashCounts({ inter: tInter, visit: tVisit, eng: tEng });
+
           } catch (error) {
-            console.log("통합일정 데이터 에러", error);
+            console.log("통합일정 로드 에러", error);
           }
           setLoading(false);
         }
@@ -425,11 +429,6 @@
       }, []);
 
       if (loading) return <div className="p-10 text-center font-black text-blue-500 text-xl tracking-widest mt-20 animate-pulse">Loading Calendar...</div>;
-
-      const todayStr = new Date().toISOString().split('T')[0];
-      const todayInterments = events.filter(e => e.date === todayStr && e.type === '안치').length;
-      const todayVisits = events.filter(e => e.date === todayStr && e.type === '답사').length;
-      const todayEngravings = events.filter(e => e.date === todayStr && e.type === '각인').length;
 
       const days = [];
       const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
@@ -440,11 +439,11 @@
         const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
         const dayEvents = events.filter(e => e.date === dateStr);
         days.push(
-          <div key={d} className={`calendar-day border border-gray-800/30 ${dateStr === todayStr ? 'today' : ''}`} onClick={() => { setSelectedDate(dateStr); setIsModalOpen(true); }}>
+          <div key={d} className={`calendar-day border border-gray-800/30 ${dateStr === new Date().toISOString().split('T')[0] ? 'today' : ''}`} onClick={() => { setSelectedDate(dateStr); setIsModalOpen(true); }}>
             <div className="text-xs font-bold text-gray-500 mb-1">{d}</div>
-            <div className="flex flex-col gap-1 overflow-y-auto h-full pr-1 custom-scrollbar">
+            <div className="space-y-1 h-[80px] overflow-y-auto">
               {dayEvents.map((e, idx) => (
-                <div key={idx} className={`text-[10px] px-1.5 py-1 rounded truncate border font-bold ${e.type === '안치' ? 'bg-green-900/40 text-green-300 border-green-800' : e.type === '답사' ? 'bg-yellow-900/40 text-yellow-300 border-yellow-800' : 'bg-blue-900/40 text-blue-300 border-blue-800'}`}>
+                <div key={idx} className={`text-[10px] px-1.5 py-1 rounded truncate border font-bold ${e.type === '안치' ? 'bg-green-900/40 text-green-300 border-green-800' : 'bg-yellow-900/40 text-yellow-300 border-yellow-800'}`}>
                   {e.type[0]} {e.title}
                 </div>
               ))}
@@ -457,13 +456,34 @@
 
       return (
         <div className="h-full flex flex-col gap-4">
-          <div className="bg-[#111] p-4 rounded-2xl border border-[#222] flex gap-6">
-            <div className="flex flex-col"><span className="text-xs text-gray-500 font-bold uppercase tracking-widest">오늘 안치</span><span className="text-xl font-black text-green-400">{todayInterments}건</span></div>
-            <div className="w-px bg-[#333]"></div>
-            <div className="flex flex-col"><span className="text-xs text-gray-500 font-bold uppercase tracking-widest">오늘 답사</span><span className="text-xl font-black text-yellow-400">{todayVisits}건</span></div>
-            <div className="w-px bg-[#333]"></div>
-            <div className="flex flex-col"><span className="text-xs text-gray-500 font-bold uppercase tracking-widest">오늘 각인</span><span className="text-xl font-black text-blue-400">{todayEngravings}건</span></div>
-          </div>
+          {/* 🚨 대시보드 (아코디언 적용 및 중앙 정렬 4등분 그리드) */}
+          <details open className="bg-[#111] rounded-2xl border border-[#222] group shadow-lg">
+            <summary className="p-4 font-black text-white flex justify-between items-center outline-none cursor-pointer hover:bg-[#1a1a1a] transition-colors rounded-2xl">
+              <div className="flex items-center gap-3">
+                <i className="ph ph-chart-pie-slice text-blue-500 text-xl"></i>
+                <span className="tracking-widest">TODAY'S DASHBOARD</span>
+              </div>
+              <i className="ph ph-caret-down text-gray-500 group-open:rotate-180 transition-transform"></i>
+            </summary>
+            <div className="grid grid-cols-4 gap-4 p-6 border-t border-[#333] bg-[#0a0a0a] rounded-b-2xl">
+              <div className="flex flex-col items-center justify-center text-center">
+                <span className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">오늘 안치</span>
+                <span className="text-2xl font-black text-green-400">{dashCounts.inter}건</span>
+              </div>
+              <div className="flex flex-col items-center justify-center text-center border-l border-[#333]">
+                <span className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">오늘 답사</span>
+                <span className="text-2xl font-black text-yellow-400">{dashCounts.visit}건</span>
+              </div>
+              <div className="flex flex-col items-center justify-center text-center border-l border-[#333]">
+                <span className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">오늘 각인</span>
+                <span className="text-2xl font-black text-blue-400">{dashCounts.eng}건</span>
+              </div>
+              <div className="flex flex-col items-center justify-center text-center border-l border-[#333]">
+                <span className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">오늘 휴무</span>
+                <span className="text-2xl font-black text-red-400">0건</span>
+              </div>
+            </div>
+          </details>
 
           <div className="h-full glass-panel rounded-3xl overflow-hidden flex flex-col border border-[#222]">
             <div className="p-6 flex justify-between items-center bg-[#1a1a1a]">
@@ -477,7 +497,7 @@
             <div className="grid grid-cols-7 text-center text-[11px] py-3 bg-[#000] text-gray-600 font-bold border-b border-[#222] tracking-widest">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=> <div key={d}>{d}</div>)}</div>
             <div className="calendar-grid flex-1 overflow-y-auto">{days}</div>
 
-            {/* 🚨 통합일정 팝업 - 세부사항 네이티브 아코디언 적용 */}
+            {/* 통합일정 팝업 - 세부사항 아코디언 적용 */}
             {isModalOpen && (
               <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" onClick={() => setIsModalOpen(false)}>
                 <div className="bg-[#1a1a1a] border border-[#333] rounded-[2.5rem] w-full max-w-md p-10 shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -488,10 +508,10 @@
                   <div className="space-y-4 max-h-80 overflow-y-auto pr-2">
                     {selectedDayEvents.length === 0 ? <p className="text-gray-600 text-center py-10 font-bold bg-[#111] rounded-2xl">등록된 일정이 없습니다.</p> : 
                       selectedDayEvents.map((e, i) => (
-                        <details key={i} className={`group p-5 rounded-2xl border bg-[#0a0a0a] ${e.type === '안치' ? 'border-green-800/50' : e.type === '답사' ? 'border-yellow-800/50' : 'border-blue-800/50'}`}>
+                        <details key={i} className={`group p-5 rounded-2xl border bg-[#0a0a0a] ${e.type === '안치' ? 'border-green-800/50' : 'border-yellow-800/50'} cursor-pointer`}>
                           <summary className="font-black text-white flex justify-between items-center outline-none">
                             <div className="flex items-center gap-3">
-                              <span className={`text-[10px] font-black px-2 py-1 rounded-md ${e.type === '안치' ? 'bg-green-700 text-white' : e.type === '답사' ? 'bg-yellow-600 text-black' : 'bg-blue-600 text-white'}`}>{e.type}</span>
+                              <span className={`text-[10px] font-black px-2 py-1 rounded-md ${e.type === '안치' ? 'bg-green-700 text-white' : 'bg-yellow-600 text-black'}`}>{e.type}</span>
                               <span className="text-base tracking-tight truncate">{e.title}</span>
                             </div>
                             <i className="ph ph-caret-down text-gray-500 group-open:rotate-180 transition-transform"></i>
@@ -512,7 +532,7 @@
       );
     }
 
-    // [4. 현장 마스터 - 정보 풀스펙 (계약번호, 기수, 분양가, 관리비 등)]
+    // [4. 현장 마스터 - 정보 팝업 (계약번호, 기수, 분양가, 관리비 연결)]
     function FieldMaster({ highlightId }) {
       const [locations, setLocations] = useState([]); const [sections, setSections] = useState([]); const [activeSection, setActiveSection] = useState(''); const [loading, setLoading] = useState(true);
       const [isModalOpen, setIsModalOpen] = useState(false); const [selectedSlot, setSelectedSlot] = useState(null);
@@ -565,6 +585,7 @@
         const { name, value } = e.target;
         setSelectedSlot(prev => ({ ...prev, [name]: value }));
       };
+      
       const handlePopupSave = async () => {
         await supabase.from('master_locations').update(selectedSlot).eq('id', selectedSlot.id);
         setLocations(prev => prev.map(l => l.id === selectedSlot.id ? selectedSlot : l));
@@ -578,7 +599,7 @@
           </div>
           <div className="flex-1 overflow-auto p-8 bg-[#000]"><div className="w-max pb-32">{rows}</div></div>
           
-          {/* 🚨 현장 마스터 전용 모달 (계약번호, 기수, 분양가, 관리비 등 풀스펙) */}
+          {/* 🚨 현장 마스터 전용 모달 (계약번호, 기수, 분양가, 관리비 등) */}
           {isModalOpen && selectedSlot && (
             <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" onClick={() => setIsModalOpen(false)}>
               <div className="bg-[#1a1a1a] border border-[#333] rounded-[2.5rem] w-full max-w-2xl p-10 shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -598,6 +619,7 @@
                   </div>
                   <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">고인명</label><input name="deceased_name" value={selectedSlot.deceased_name || ''} onChange={handlePopupChange} className="jake-input text-white" /></div>
                   
+                  {/* 🚨 계약번호, 기수, 분양가, 관리비 연결 복구 */}
                   <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">계약번호</label><input name="contract_no" value={selectedSlot.contract_no || ''} onChange={handlePopupChange} className="jake-input" /></div>
                   <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">계약자명</label><input name="contractor" value={selectedSlot.contractor || ''} onChange={handlePopupChange} className="jake-input" /></div>
                   
