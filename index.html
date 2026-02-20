@@ -32,7 +32,7 @@
     /* 🚨 네이티브 아코디언 */
     details > summary { list-style: none; outline: none; cursor: pointer; }
     details > summary::-webkit-details-marker { display: none; }
-    details[open] summary ~ * { animation: sweep .2s ease-in-out; }
+    details[open] > summary ~ * { animation: sweep .2s ease-in-out; }
     @keyframes sweep { 0% {opacity: 0; margin-top: -10px} 100% {opacity: 1; margin-top: 0px} }
 
     .row-container { display: flex; flex-direction: row; gap: 4px; margin-bottom: 8px; width: max-content; }
@@ -40,9 +40,9 @@
     .slot:active { transform: scale(0.95); }
     .slot-spacer { visibility: hidden; width: 82px; }
 
-    /* 🚨 달력 그리드 최소 높이 강제 (찌그러짐 방지) */
-    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: minmax(130px, auto); gap: 1px; background-color: #222; }
-    .calendar-day { background-color: #111; padding: 6px; cursor: pointer; transition: background 0.1s; display: flex; flex-direction: column;}
+    /* 🚨 달력 화면 넘침 방지 (grid-auto-rows: 1fr) */
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: 1fr; gap: 1px; background-color: #222; flex: 1; min-height: 0; }
+    .calendar-day { background-color: #111; padding: 6px; cursor: pointer; transition: background 0.1s; display: flex; flex-direction: column; overflow: hidden; }
     .calendar-day:hover { background-color: #1a1a1a; }
     .calendar-day.today { border: 2px solid #facc15; background-color: #1a1e1a; }
     
@@ -58,14 +58,14 @@
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxY2N4bmNpaWFqd3FkbXB3amR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MjA3MTMsImV4cCI6MjA4NzA5NjcxM30.L23-eq-DIPsbONOeX-xQ8UcMb7gtgTTTRpkaSm9HTw4';
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // 🚨 절대 서열 정리 (오선하 1순위 노출 보장)
+    // 🚨 절대 서열 정리
     const getEngPriority = (status) => {
       const s = String(status || '').trim();
       if (s === '접수') return 0;
       if (s === '디자인완료' || s === '시안대기') return 1;
       if (s === '각인완료' || s === '작업중' || s === '각인') return 2;
       if (s === '설치완료' || s === '완료') return 3;
-      return 0; // 예외값은 무조건 위로 (접수 취급)
+      return 0; 
     };
     const getEngClass = (status) => {
       const p = getEngPriority(status);
@@ -76,36 +76,53 @@
       return 'eng-접수';
     };
 
-    // 🚨 안전한 날짜 변환 함수 (빈칸은 1970년으로 보내서 맨 밑바닥으로 내림)
+    // 🚨 안전한 날짜 변환 함수 (빈칸은 0으로 만들어버림 = 1970년)
     const getSafeTime = (dateStr) => {
-      if (!dateStr || dateStr.trim() === '') return 0; // 1970-01-01
+      if (!dateStr || String(dateStr).trim() === '') return 0;
       const t = new Date(dateStr).getTime();
       return isNaN(t) ? 0 : t;
     };
 
-    // [1. 통합 검색]
+    // [1. 탭 연동형 통합 검색]
     function GlobalSearch({ onSelectResult, currentTab }) {
       const [query, setQuery] = useState('');
       const [results, setResults] = useState([]);
       useEffect(() => {
         if (query.trim().length < 2) { setResults([]); return; }
         const t = setTimeout(async () => {
-          const tableName = currentTab === 'engraving' ? 'engravings' : 'master_locations';
-          const { data } = await supabase.from(tableName).select('*').or(`deceased_name.ilike.%${query}%,contractor.ilike.%${query}%`).limit(10);
-          setResults(data || []);
+          let tableName = 'master_locations';
+          if (currentTab === 'engraving') tableName = 'engravings';
+          if (currentTab === 'contact') tableName = 'contacts';
+          
+          try {
+            let data = [];
+            if (tableName === 'contacts') {
+              const res = await supabase.from('contacts').select('*').or(`company_name.ilike.%${query}%,manager_name.ilike.%${query}%`).limit(10);
+              data = res.data;
+            } else {
+              const res = await supabase.from(tableName).select('*').or(`deceased_name.ilike.%${query}%,contractor.ilike.%${query}%`).limit(10);
+              data = res.data;
+            }
+            setResults(data || []);
+          } catch(e) { console.log(e); }
         }, 300);
         return () => clearTimeout(t);
       }, [query, currentTab]);
 
       return (
         <div className="relative w-full max-w-md z-[9999]">
-          <input type="text" placeholder={`고인명/계약자 검색 (${currentTab === 'engraving' ? '각인DB' : '현장DB'})`} className="jake-input pl-4 shadow-2xl" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <input type="text" placeholder="검색 (이름, 계약자, 업체명 등)..." className="jake-input pl-4 shadow-2xl" value={query} onChange={(e) => setQuery(e.target.value)} />
           {results.length > 0 && (
             <div className="absolute top-full left-0 right-0 mt-2 glass-panel rounded-xl shadow-[0_30px_60px_rgba(0,0,0,0.9)] z-[9999] p-1 border border-[#444] max-h-80 overflow-y-auto">
               {results.map(res => (
                 <div key={res.id} onClick={() => { onSelectResult(res); setQuery(''); setResults([]); }} className="p-4 hover:bg-[#222] rounded-lg cursor-pointer border-b border-[#333] last:border-0 transition-colors">
-                  <div className="text-[10px] text-blue-400 font-bold mb-0.5">{res.section || res.location || '위치미상'}</div>
-                  <div className="font-bold text-gray-100">{res.deceased_name || '(공란)'} <span className="text-xs font-normal text-gray-500 ml-2">| {res.contractor}</span></div>
+                  <div className="text-[10px] text-blue-400 font-bold mb-0.5">
+                    {currentTab === 'contact' ? res.category : (res.section || res.location || '위치미상')}
+                  </div>
+                  <div className="font-bold text-gray-100">
+                    {currentTab === 'contact' ? res.company_name : (res.deceased_name || '(공란)')} 
+                    <span className="text-xs font-normal text-gray-500 ml-2">| {currentTab === 'contact' ? res.manager_name : res.contractor}</span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -134,7 +151,7 @@
       return (
         <div className="fixed inset-0 bg-black/90 z-[9999] flex items-center justify-center p-4" onClick={onClose}>
           <div className="bg-[#111] border border-[#333] rounded-[2rem] w-full max-w-4xl p-8 shadow-2xl flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6 border-b border-[#222] pb-4">
+            <div className="flex justify-between items-center mb-6 border-b border-[#222] pb-4 shrink-0">
               <h3 className="text-2xl font-black text-white">각인 데이터 편집 <span className="text-blue-500 ml-2">{formData.deceased_name}</span></h3>
               <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors"><i className="ph ph-x text-3xl" /></button>
             </div>
@@ -146,27 +163,27 @@
                 <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">고인명</label><input name="deceased_name" value={formData.deceased_name || ''} onChange={handleChange} className="jake-input" /></div>
                 <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">안치일정</label><input type="date" name="scheduled_date" value={formData.scheduled_date || ''} onChange={handleChange} className="jake-input" /></div>
                 
-                {/* 🚨 규격 및 종교 Datalist 적용 (기존 데이터 완벽 보존 + 드롭다운 지원) */}
+                {/* 🚨 규격 및 종교 퀵버튼 방식 도입 (오류 없음) */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-gray-500 uppercase">규격</label>
-                  <input name="size_spec" list="sizeList" value={formData.size_spec || ''} onChange={handleChange} className="jake-input cursor-pointer" placeholder="직접 입력 또는 선택" />
-                  <datalist id="sizeList">
-                    <option value="160*100" />
-                    <option value="130*80" />
-                    <option value="100*62" />
-                  </datalist>
+                  <input name="size_spec" value={formData.size_spec || ''} onChange={handleChange} className="jake-input" placeholder="규격 입력" />
+                  <div className="flex gap-1 mt-1 flex-wrap">
+                    <button onClick={()=>setFormData({...formData, size_spec:'160*100'})} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">160*100</button>
+                    <button onClick={()=>setFormData({...formData, size_spec:'130*80'})} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">130*80</button>
+                    <button onClick={()=>setFormData({...formData, size_spec:'100*62'})} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">100*62</button>
+                  </div>
                 </div>
                 
                 <div className="space-y-1 col-span-2">
                   <label className="text-[10px] font-black text-gray-500 uppercase">종교 / 특이사항</label>
-                  <input name="religion" list="relList" value={formData.religion || ''} onChange={handleChange} className="jake-input cursor-pointer" placeholder="직접 입력 또는 선택" />
-                  <datalist id="relList">
-                    <option value="기본" />
-                    <option value="사용자 요청 디자인" />
-                    <option value="교회직분 추가" />
-                    <option value="세례명 추가" />
-                    <option value="불교 만자 추가" />
-                  </datalist>
+                  <input name="religion" value={formData.religion || ''} onChange={handleChange} className="jake-input" placeholder="종교/특이사항 입력" />
+                  <div className="flex gap-1 mt-1 flex-wrap">
+                    <button onClick={()=>setFormData({...formData, religion:'기본'})} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">기본</button>
+                    <button onClick={()=>setFormData({...formData, religion:'사용자 요청 디자인'})} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">요청 디자인</button>
+                    <button onClick={()=>setFormData({...formData, religion:'교회직분 추가'})} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">교회직분</button>
+                    <button onClick={()=>setFormData({...formData, religion:'세례명 추가'})} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">세례명</button>
+                    <button onClick={()=>setFormData({...formData, religion:'불교 만자 추가'})} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">불교(卍)</button>
+                  </div>
                 </div>
                 
                 <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">위치 정보 (동/구역/번호)</label><input name="location" value={formData.location || ''} onChange={handleChange} className="jake-input text-blue-400" /></div>
@@ -219,7 +236,8 @@
 
       useEffect(() => {
         async function fetchEngravings() {
-          const { data } = await supabase.from('engravings').select('*');
+          const { data, error } = await supabase.from('engravings').select('*');
+          if (error) console.log(error);
           if (data) setRawList(data);
           setLoading(false);
         }
@@ -230,9 +248,12 @@
         if (highlightItem) setEditingItem(highlightItem);
       }, [highlightItem]);
 
-      // 🚨 절대 정렬 알고리즘 (오선하 증발 완벽 해결)
+      // 🚨 절대 정렬 알고리즘 (오선하 증발 및 과거 데이터 우선 문제 완벽 해결)
       const sortedFolders = useMemo(() => {
-        const valid = rawList.filter(i => i.deceased_name && String(i.deceased_name).trim() !== '' && i.deceased_name !== '.');
+        const valid = rawList.filter(i => {
+          const name = String(i.deceased_name || '').trim();
+          return name.length > 0 && name !== '.';
+        });
 
         const groupsObj = valid.reduce((acc, i) => {
           const cNo = (i.contract_no && String(i.contract_no).trim() !== '') ? String(i.contract_no).trim() : `개별접수-${i.id.substring(0,4)}`;
@@ -246,8 +267,7 @@
             const pA = getEngPriority(a.status);
             const pB = getEngPriority(b.status);
             if (pA !== pB) return pA - pB;
-            
-            // 미래 날짜가 상단으로 오도록 내림차순(b - a). 빈 날짜는 0이므로 맨 아래로.
+            // 미래 날짜가 상단으로 오도록 내림차순(b - a). 빈 날짜(0)는 맨 아래로.
             return getSafeTime(b.scheduled_date) - getSafeTime(a.scheduled_date); 
           });
           return { cNo, items };
@@ -277,7 +297,7 @@
             </div>
           </div>
           
-          <div className="flex-1 overflow-y-auto pr-2 pb-40">
+          <div className="flex-1 overflow-y-auto pr-2 pb-40 custom-scrollbar">
             {viewMode === 'list' ? (
               <div className="space-y-4">
                 {sortedFolders.map(folderInfo => {
@@ -394,7 +414,7 @@
     // [3. 통합 일정 (각인 제외 및 중앙정렬 대시보드)]
     function CalendarView() {
       const [events, setEvents] = useState([]);
-      const [dashCounts, setDashCounts] = useState({ inter: 0, visit: 0, eng: 0 });
+      const [dashCounts, setDashCounts] = useState({ inter: 0, visit: 0, leave: 0 });
       const [loading, setLoading] = useState(true);
       const [currentDate, setCurrentDate] = useState(new Date());
       const [selectedDate, setSelectedDate] = useState(null);
@@ -403,10 +423,10 @@
       useEffect(() => {
         async function fetchAll() {
           try {
-            // 통합일정 달력에는 안치/답사만 (각인 제외)
+            // 통합일정 달력에는 각인 제외하고 안치/답사만. 근태는 대시보드만.
             const { data: inter } = await supabase.from('interments').select('*');
             const { data: pipe } = await supabase.from('sales_pipeline').select('*');
-            const { data: engs } = await supabase.from('engravings').select('*'); // 각인은 대시보드 카운트용으로만 호출
+            const { data: att } = await supabase.from('attendance').select('*');
             
             let merged = [];
             if (inter) merged = [...merged, ...inter.filter(i=>i.scheduled_date).map(i => ({ date: i.scheduled_date, title: `${i.deceased_name}(안치)`, type: '안치', memo: i.memo }))];
@@ -417,8 +437,8 @@
             const todayStr = new Date().toISOString().split('T')[0];
             const tInter = inter ? inter.filter(i => i.scheduled_date === todayStr).length : 0;
             const tVisit = pipe ? pipe.filter(p => p.visit_date === todayStr).length : 0;
-            const tEng = engs ? engs.filter(e => e.scheduled_date === todayStr).length : 0;
-            setDashCounts({ inter: tInter, visit: tVisit, eng: tEng });
+            const tLeave = att ? att.filter(a => a.work_date === todayStr && a.status === '휴무').length : 0;
+            setDashCounts({ inter: tInter, visit: tVisit, leave: tLeave });
 
           } catch (error) {
             console.log("통합일정 로드 에러", error);
@@ -441,7 +461,7 @@
         days.push(
           <div key={d} className={`calendar-day border border-gray-800/30 ${dateStr === new Date().toISOString().split('T')[0] ? 'today' : ''}`} onClick={() => { setSelectedDate(dateStr); setIsModalOpen(true); }}>
             <div className="text-xs font-bold text-gray-500 mb-1">{d}</div>
-            <div className="space-y-1 h-[80px] overflow-y-auto">
+            <div className="space-y-1 h-full overflow-y-auto pr-1 custom-scrollbar">
               {dayEvents.map((e, idx) => (
                 <div key={idx} className={`text-[10px] px-1.5 py-1 rounded truncate border font-bold ${e.type === '안치' ? 'bg-green-900/40 text-green-300 border-green-800' : 'bg-yellow-900/40 text-yellow-300 border-yellow-800'}`}>
                   {e.type[0]} {e.title}
@@ -456,7 +476,7 @@
 
       return (
         <div className="h-full flex flex-col gap-4">
-          {/* 🚨 대시보드 (아코디언 적용 및 중앙 정렬 4등분 그리드) */}
+          {/* 🚨 대시보드 3등분 쫙 펴지게 수정 */}
           <details open className="bg-[#111] rounded-2xl border border-[#222] group shadow-lg">
             <summary className="p-4 font-black text-white flex justify-between items-center outline-none cursor-pointer hover:bg-[#1a1a1a] transition-colors rounded-2xl">
               <div className="flex items-center gap-3">
@@ -465,22 +485,20 @@
               </div>
               <i className="ph ph-caret-down text-gray-500 group-open:rotate-180 transition-transform"></i>
             </summary>
-            <div className="grid grid-cols-4 gap-4 p-6 border-t border-[#333] bg-[#0a0a0a] rounded-b-2xl">
-              <div className="flex flex-col items-center justify-center text-center">
+            <div className="flex justify-evenly items-center p-6 border-t border-[#333] bg-[#0a0a0a] rounded-b-2xl">
+              <div className="flex flex-col items-center flex-1">
                 <span className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">오늘 안치</span>
-                <span className="text-2xl font-black text-green-400">{dashCounts.inter}건</span>
+                <span className="text-3xl font-black text-green-400">{dashCounts.inter}건</span>
               </div>
-              <div className="flex flex-col items-center justify-center text-center border-l border-[#333]">
+              <div className="w-px h-12 bg-[#333]"></div>
+              <div className="flex flex-col items-center flex-1">
                 <span className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">오늘 답사</span>
-                <span className="text-2xl font-black text-yellow-400">{dashCounts.visit}건</span>
+                <span className="text-3xl font-black text-yellow-400">{dashCounts.visit}건</span>
               </div>
-              <div className="flex flex-col items-center justify-center text-center border-l border-[#333]">
-                <span className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">오늘 각인</span>
-                <span className="text-2xl font-black text-blue-400">{dashCounts.eng}건</span>
-              </div>
-              <div className="flex flex-col items-center justify-center text-center border-l border-[#333]">
+              <div className="w-px h-12 bg-[#333]"></div>
+              <div className="flex flex-col items-center flex-1">
                 <span className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">오늘 휴무</span>
-                <span className="text-2xl font-black text-red-400">0건</span>
+                <span className="text-3xl font-black text-red-400">{dashCounts.leave}명</span>
               </div>
             </div>
           </details>
@@ -497,7 +515,6 @@
             <div className="grid grid-cols-7 text-center text-[11px] py-3 bg-[#000] text-gray-600 font-bold border-b border-[#222] tracking-widest">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=> <div key={d}>{d}</div>)}</div>
             <div className="calendar-grid flex-1 overflow-y-auto">{days}</div>
 
-            {/* 통합일정 팝업 - 세부사항 아코디언 적용 */}
             {isModalOpen && (
               <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" onClick={() => setIsModalOpen(false)}>
                 <div className="bg-[#1a1a1a] border border-[#333] rounded-[2.5rem] w-full max-w-md p-10 shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -505,7 +522,7 @@
                     <div><h3 className="text-2xl font-black text-white">{selectedDate?.split('-')[2]}일 일정</h3><p className="text-sm text-blue-500 font-mono font-bold mt-2">{selectedDate}</p></div>
                     <button onClick={() => setIsModalOpen(false)}><i className="ph ph-x text-3xl text-gray-500 hover:text-white" /></button>
                   </div>
-                  <div className="space-y-4 max-h-80 overflow-y-auto pr-2">
+                  <div className="space-y-4 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
                     {selectedDayEvents.length === 0 ? <p className="text-gray-600 text-center py-10 font-bold bg-[#111] rounded-2xl">등록된 일정이 없습니다.</p> : 
                       selectedDayEvents.map((e, i) => (
                         <details key={i} className={`group p-5 rounded-2xl border bg-[#0a0a0a] ${e.type === '안치' ? 'border-green-800/50' : 'border-yellow-800/50'} cursor-pointer`}>
@@ -541,14 +558,17 @@
 
       useEffect(() => {
         async function fetchLoc() {
-          let all = []; let from = 0; while (true) {
-            const { data, error } = await supabase.from('master_locations').select('*').range(from, from + 999);
-            if (!data || data.length === 0) break; all = [...all, ...data]; from += 1000;
-          }
-          if (all.length > 0) {
-            setLocations(all); const sects = [...new Set(all.map(i => i.section).filter(Boolean))].sort((a,b) => a.localeCompare(b, undefined, {numeric:true}));
-            setSections(sects); if (sects.length > 0) setActiveSection(sects[0]);
-          } setLoading(false);
+          try {
+            let all = []; let from = 0; while (true) {
+              const { data, error } = await supabase.from('master_locations').select('*').range(from, from + 999);
+              if (!data || data.length === 0) break; all = [...all, ...data]; from += 1000;
+            }
+            if (all.length > 0) {
+              setLocations(all); const sects = [...new Set(all.map(i => i.section).filter(Boolean))].sort((a,b) => a.localeCompare(b, undefined, {numeric:true}));
+              setSections(sects); if (sects.length > 0) setActiveSection(sects[0]);
+            } 
+          } catch(e) {}
+          setLoading(false);
         } fetchLoc();
       }, []);
 
@@ -594,12 +614,12 @@
 
       return (
         <div className="flex flex-col h-full glass-panel rounded-3xl overflow-hidden border border-[#222]">
-          <div className="flex overflow-x-auto bg-[#161616] p-4 gap-2 border-b border-[#2a2a2a] shrink-0">
+          <div className="flex overflow-x-auto bg-[#161616] p-4 gap-2 border-b border-[#2a2a2a] shrink-0 custom-scrollbar">
             {sections.map(s => <button key={s} onClick={() => setActiveSection(s)} className={`px-4 py-2 rounded-xl text-xs font-black whitespace-nowrap transition-colors ${activeSection === s ? 'bg-blue-600 text-white' : 'bg-[#222] text-gray-500 hover:text-white'}`}>{s}</button>)}
           </div>
-          <div className="flex-1 overflow-auto p-8 bg-[#000]"><div className="w-max pb-32">{rows}</div></div>
+          <div className="flex-1 overflow-auto p-8 bg-[#000] custom-scrollbar"><div className="w-max pb-32">{rows}</div></div>
           
-          {/* 🚨 현장 마스터 전용 모달 (계약번호, 기수, 분양가, 관리비 등) */}
+          {/* 🚨 현장 마스터 전용 모달 (계약번호, 기수, 분양가 등 풀스펙) */}
           {isModalOpen && selectedSlot && (
             <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" onClick={() => setIsModalOpen(false)}>
               <div className="bg-[#1a1a1a] border border-[#333] rounded-[2.5rem] w-full max-w-2xl p-10 shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -611,7 +631,7 @@
                   <button onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-white transition-colors"><i className="ph ph-x text-3xl" /></button>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto max-h-[60vh] pr-2 custom-scrollbar">
                   <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">분양 상태</label>
                     <select name="status" value={selectedSlot.status || '미분양'} onChange={handlePopupChange} className="jake-input cursor-pointer">
                       <option value="미분양">미분양</option><option value="예약">예약</option><option value="계약금">계약금</option><option value="홀딩">홀딩</option><option value="안치">안치</option>
@@ -619,11 +639,10 @@
                   </div>
                   <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">고인명</label><input name="deceased_name" value={selectedSlot.deceased_name || ''} onChange={handlePopupChange} className="jake-input text-white" /></div>
                   
-                  {/* 🚨 계약번호, 기수, 분양가, 관리비 연결 복구 */}
                   <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">계약번호</label><input name="contract_no" value={selectedSlot.contract_no || ''} onChange={handlePopupChange} className="jake-input" /></div>
                   <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">계약자명</label><input name="contractor" value={selectedSlot.contractor || ''} onChange={handlePopupChange} className="jake-input" /></div>
                   
-                  <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">기수 (Capacity)</label><input name="capacity" value={selectedSlot.capacity || ''} onChange={handlePopupChange} className="jake-input" /></div>
+                  <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">기수 (Capacity)</label><input name="units" type="number" value={selectedSlot.units || ''} onChange={handlePopupChange} className="jake-input" /></div>
                   <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">분양가 (Price)</label><input name="price" type="number" value={selectedSlot.price || ''} onChange={handlePopupChange} className="jake-input" /></div>
                   
                   <div className="space-y-1 col-span-1 md:col-span-2"><label className="text-[10px] font-black text-gray-500 uppercase">관리비 (Maintenance Fee)</label><input name="maintenance_fee" type="number" value={selectedSlot.maintenance_fee || ''} onChange={handlePopupChange} className="jake-input" /></div>
@@ -640,28 +659,13 @@
       );
     }
 
-    // [5. 프로젝트 칸반]
+    // [5. 업무 통합 보드 (WorkOS 프로젝트 껍데기만. 추후 연동)]
     function KanbanBoard() {
-      const [projects, setProjects] = useState([]); const [loading, setLoading] = useState(true);
-      useEffect(() => { async function fetch() { const { data } = await supabase.from('projects').select('*').order('start_date', { ascending: false }); setProjects(data || []); setLoading(false); } fetch(); }, []);
-      if (loading) return <div className="p-10 text-center animate-pulse font-black uppercase text-blue-500 tracking-widest">Loading Projects...</div>;
-      const cols = [{ id: '준비', title: '📝 준비', c: 'border-gray-600' },{ id: '진행중', title: '🚀 진행중', c: 'border-blue-600' },{ id: '보류', title: '⏸️ 보류', c: 'border-orange-600' },{ id: '완료', title: '✅ 완료', c: 'border-green-800' }];
       return (
-        <div className="flex gap-6 overflow-x-auto h-full pb-10 items-start">
-          {cols.map(col => (
-            <div key={col.id} className="w-80 flex flex-col h-full glass-panel rounded-[2rem] p-6 shrink-0 bg-[#0f0f0f] border border-[#222]">
-              <div className={`text-base font-black mb-6 border-b-2 pb-3 ${col.c} text-gray-300 flex justify-between uppercase tracking-widest`}><span>{col.title}</span><span className="text-xs bg-[#000] px-3 py-1 rounded-xl border border-[#333]">{projects.filter(p=>p.status===col.id).length}</span></div>
-              <div className="flex-1 overflow-y-auto space-y-4 pr-1">
-                {projects.filter(p => p.status === col.id).map(p => (
-                  <div key={p.id} className="bg-[#181818] p-5 rounded-2xl border border-[#2a2a2a] shadow-lg hover:border-blue-500/50 transition-all border-l-4 border-l-gray-600 cursor-pointer">
-                    <div className="text-[10px] text-gray-500 mb-2 font-mono font-bold">{p.id}</div>
-                    <div className="font-black text-base text-gray-100 leading-snug">{p.title}</div>
-                    <div className="flex justify-between mt-5 text-[11px] text-gray-500 font-black uppercase tracking-widest"><span><i className="ph ph-user mr-1"></i>{p.personnel || '미정'}</span><span><i className="ph ph-clock mr-1"></i>{p.end_date || '-'}</span></div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
+        <div className="flex flex-col items-center justify-center h-full text-gray-500 border-2 border-dashed border-[#333] rounded-3xl">
+          <i className="ph ph-kanban text-6xl mb-4 text-[#444]"></i>
+          <p className="font-bold text-lg text-gray-400">WorkOS 통합 모듈 준비 중</p>
+          <p className="text-xs text-gray-600 mt-2">업체 연락처, 회의록, 업무 칸반보드</p>
         </div>
       );
     }
@@ -676,7 +680,7 @@
       const navItems = [{ id: 'field', icon: 'ph-map-trifold', label: '현장 마스터' }, { id: 'calendar', icon: 'ph-calendar-check', label: '통합 일정' }, { id: 'engraving', icon: 'ph-hammer', label: '각인 관리' }, { id: 'project', icon: 'ph-kanban', label: 'Work 프로젝트' }];
       
       const handleSearchResult = (res) => {
-        if (currentTab === 'engraving') {
+        if (currentTab === 'engraving' || currentTab === 'contact') {
           setHighlightEngraving(res); 
         } else {
           setCurrentTab('field'); 
@@ -689,7 +693,7 @@
         <div className="flex h-screen bg-[#050505] overflow-hidden text-gray-400 font-sans selection:bg-blue-500/30">
           <aside className={`fixed md:static inset-y-0 left-0 z-[1500] w-72 bg-[#0a0a0a] border-r border-[#1a1a1a] transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 flex flex-col shadow-2xl`}>
             <div className="p-10 border-b border-[#1a1a1a] flex justify-between items-center"><h1 className="text-3xl font-black text-white tracking-tighter uppercase">Jake<span className="text-blue-500">OS</span></h1></div>
-            <nav className="flex-1 p-6 space-y-3 overflow-y-auto">
+            <nav className="flex-1 p-6 space-y-3 overflow-y-auto custom-scrollbar">
               <div className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-6 ml-3">System Modules</div>
               {navItems.map(item => (<button key={item.id} onClick={() => { setCurrentTab(item.id); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-4 px-6 py-5 rounded-3xl text-sm font-black transition-all ${currentTab === item.id ? 'bg-blue-600 text-white shadow-[0_10px_30px_rgba(37,99,235,0.3)]' : 'text-gray-500 hover:bg-[#111]'}`}><i className={`ph ${item.icon} text-2xl`}></i> {item.label}</button>))}
             </nav>
