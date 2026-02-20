@@ -130,7 +130,7 @@
             let from = 0;
             const step = 1000;
             
-            // 🚨 핵심 수정: 데이터가 바닥날 때까지 1000개씩 무한 루프로 퍼올림
+            // 데이터 무한 펌프 로직
             while (true) {
               const { data, error } = await supabase
                 .from('master_locations')
@@ -142,19 +142,18 @@
                 allData = [...allData, ...data];
               }
               if (!data || data.length < step) {
-                break; // 더 이상 가져올 데이터가 없으면 루프 탈출
+                break; 
               }
               from += step;
             }
 
             if (allData.length > 0) {
               setLocations(allData);
-              // 중복 제거 후 숫자 우선(Numeric) 정렬 알고리즘 적용 (B1 -> B2 -> B10 순서 보장)
               const uniqueSections = [...new Set(allData.map(item => item.section).filter(Boolean))]
                 .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
               
               setSections(uniqueSections);
-              if (uniqueSections.length > 0) setActiveSection(uniqueSections[0]); // 첫 번째 탭으로 초기화
+              if (uniqueSections.length > 0) setActiveSection(uniqueSections[0]);
             }
           } catch (err) {
             console.error(err);
@@ -165,7 +164,7 @@
         fetchLocations();
       }, []);
 
-      if (loading) return <div className="p-8 text-center text-gray-500 animate-pulse">모든 수목 현장 데이터 로딩 중 (Pagination)...</div>;
+      if (loading) return <div className="p-8 text-center text-gray-500 animate-pulse">모든 수목 현장 데이터 로딩 중...</div>;
 
       const currentData = locations.filter(loc => loc.section === activeSection);
       const layout = rowConfig[activeSection] || [20, 20]; 
@@ -178,6 +177,7 @@
         
         const rowData = currentData.slice(currentIndex, currentIndex + count);
         
+        // 🚨 이 부분의 문법(중괄호 닫기)을 100% 정상 복구했습니다.
         rows.push(
           <div key={`row-${rIdx}`} className="row-container">
             {rowData.map((item, idx) => {
@@ -195,8 +195,7 @@
                   <div className="deceased-name truncate w-full px-1">{item.deceased_name || ''}</div>
                 </div>
               );
-            });
-            }
+            })}
           </div>
         );
         currentIndex += count;
