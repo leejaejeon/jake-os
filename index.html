@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Jake WorkOS V10 - Real Map & Perfect Sync</title>
+  <title>Jake WorkOS V11 - Perfect Map & Daily Modal</title>
   
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -15,26 +15,27 @@
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
     body { font-family: 'Pretendard', sans-serif; background-color: #f1f5f9; color: #1e293b; -webkit-font-smoothing: antialiased; overflow: hidden; }
     
-    /* 스크롤바 디자인 최적화 (가로/세로 스크롤 시인성 확보) */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
-    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    /* 2D 스크롤바 디자인 (PC/모바일 공통 시인성 확보) */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #f8fafc; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; border: 2px solid #f8fafc; }
     ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     
-    /* 달력 및 모달 애니메이션 */
+    /* 달력 셀 및 애니메이션 */
     .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background-color: #e2e8f0; border: 1px solid #e2e8f0; }
-    .calendar-cell { min-height: 120px; background-color: #fff; padding: 4px; transition: background 0.2s; cursor: pointer; }
+    .calendar-cell { min-height: 110px; background-color: #fff; padding: 4px; transition: background 0.2s; cursor: pointer; }
     .calendar-cell:hover { background-color: #f8fafc; }
-    
-    .modal-enter { animation: fadeIn 0.2s ease-out; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .modal-enter { animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
 
-    /* 현실 지도(Real Map) 슬롯 디자인 */
+    /* 현실 지도 (Real Map) 렌더링 물리 엔진 */
     .map-row { display: flex; flex-direction: row; justify-content: flex-start; gap: 4px; margin-bottom: 4px; width: max-content; }
     .map-slot { width: 85px; min-width: 85px; height: 70px; border-radius: 6px; border: 1px solid #cbd5e1; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; transition: transform 0.1s, opacity 0.1s; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
     .map-slot:active { transform: scale(0.95); opacity: 0.8; }
-    .slot-id { font-size: 10px; opacity: 0.7; font-weight: 700; margin-bottom: 2px; }
-    .slot-name { font-size: 11.5px; font-weight: 800; text-align: center; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 2px; }
+    .slot-id { font-size: 10px; opacity: 0.8; font-weight: 800; margin-bottom: 2px; }
+    .slot-name { font-size: 11px; font-weight: 800; text-align: center; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 2px; letter-spacing: -0.5px; }
   </style>
 </head>
 <body>
@@ -48,15 +49,19 @@
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxY2N4bmNpaWFqd3FkbXB3amR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MjA3MTMsImV4cCI6MjA4NzA5NjcxM30.L23-eq-DIPsbONOeX-xQ8UcMb7gtgTTTRpkaSm9HTw4';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // 🛡️ Data Sanitizer (V8.5의 가장 안정적인 로직 보존)
+    // 🛡️ Data Sanitizer
     const clean = (val) => (!val || val === '0.0' || val === '0' || val === 'null' || val === ' -  - ') ? '' : String(val).trim();
     const normalizeDate = (v) => { 
       if(!v) return null; 
       const s = String(v).replace(/\./g,'-').replace(/\s/g,'').substring(0,10);
       return s.match(/^\d{4}-\d{2}-\d{2}$/) ? s : null;
     };
+    const formatMoney = (val) => {
+      const num = parseInt(String(val).replace(/[^0-9]/g, ''));
+      return isNaN(num) ? '0원' : num.toLocaleString() + '원';
+    };
 
-    // 📍 현실 지도 레이아웃 환경 변수 (Jake의 GAS 소스코드 기반)
+    // 📍 현실 지도(Real Map) 레이아웃 환경 변수
     const SECTION_LIST = ['A2/가','A3/가','A4/가','A4/나','A4/다','A5/가','A5/나','A6/가','A6/나','B1/가','B2/가','B3/가','B4/가','B5/가','B6/가/1-12','B6/가/13-14','C1/가'];
     const ROW_CONFIG = { 
       'A2/가':[12], 'A3/가':[8,8], 'A4/가':[12,12,12,12,18,18,28,12], 'A4/나':[9,11,7,8,8], 'A4/다':[6,6], 'A5/가':[13,14,14,13,13,15,11], 
@@ -71,15 +76,15 @@
     function Modal({ isOpen, onClose, title, children }) {
       if (!isOpen) return null;
       return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm modal-enter" onClick={onClose}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm" onClick={onClose}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col modal-enter" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <h3 className="text-lg font-black text-slate-800 tracking-tight">{title}</h3>
-              <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition text-slate-500 font-bold">✕</button>
+              <button onClick={onClose} className="p-1 hover:bg-slate-200 rounded-lg transition text-slate-500 font-bold">✕</button>
             </div>
-            <div className="flex-1 overflow-y-auto p-5">{children}</div>
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
-              <button onClick={onClose} className="px-5 py-2 bg-slate-800 text-white rounded-lg font-bold hover:bg-slate-700 transition shadow-md">닫기</button>
+            <div className="flex-1 overflow-y-auto p-4 bg-slate-100/50">{children}</div>
+            <div className="p-3 bg-white border-t border-slate-100 flex flex-col">
+              <button onClick={onClose} className="w-full py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700 transition shadow-sm">닫기</button>
             </div>
           </div>
         </div>
@@ -87,12 +92,13 @@
     }
 
     // ==========================================
-    // 📊 View: Unified Dashboard (Calendar)
+    // 📊 View: Unified Dashboard (Daily List Modal)
     // ==========================================
-    function DashboardView({ onEventClick }) {
+    function DashboardView() {
       const [loading, setLoading] = useState(true);
       const [events, setEvents] = useState([]);
       const [currentDate, setCurrentDate] = useState(new Date());
+      const [dailyModal, setDailyModal] = useState({ isOpen: false, date: '', events: [] });
 
       useEffect(() => {
         const fetchAll = async () => {
@@ -106,7 +112,7 @@
             const burialEvents = (burRes.data || []).map(b => ({
               type: 'burial',
               date: normalizeDate(b.안치일),
-              title: `🟢 ${clean(b.고인명)}`,
+              title: clean(b.고인명),
               sub: clean(b.위치),
               raw: b
             }));
@@ -114,7 +120,7 @@
             const salesEvents = (salRes.data || []).map(s => ({
               type: 'sales',
               date: normalizeDate(s.답사일) || normalizeDate(s.등록일),
-              title: `🟡 ${clean(s.고객_고인_명)}`,
+              title: clean(s.고객_고인_명),
               sub: `${clean(s.영업자사명)}/${clean(s.영업자성함)}`,
               status: s.현재상태,
               raw: s
@@ -140,38 +146,47 @@
         return days;
       }, [currentDate, events]);
 
+      const openDailyList = (dateStr, dayEvents) => {
+        setDailyModal({ isOpen: true, date: dateStr, events: dayEvents });
+      };
+
       return (
-        <div className="space-y-6 max-w-7xl mx-auto">
-          <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200 overflow-hidden">
-            <div className="p-4 md:p-6 bg-white border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="space-y-6 max-w-7xl mx-auto h-full flex flex-col">
+          <div className="bg-white rounded-3xl shadow-xl border border-slate-200 flex flex-col h-full overflow-hidden">
+            <div className="p-4 md:p-6 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
               <div className="flex items-center space-x-4">
-                <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-2 hover:bg-slate-100 rounded-full transition font-black">◀</button>
+                <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-2 hover:bg-slate-100 rounded-full font-black">◀</button>
                 <h2 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight">{currentDate.getFullYear()}년 {currentDate.getMonth() + 1}월</h2>
-                <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-2 hover:bg-slate-100 rounded-full transition font-black">▶</button>
-              </div>
-              <div className="flex space-x-2 text-[11px] font-bold">
-                <span className="px-3 py-1.5 bg-emerald-100 text-emerald-800 rounded-md border border-emerald-200 shadow-sm">🟢 안치일정</span>
-                <span className="px-3 py-1.5 bg-amber-100 text-amber-800 rounded-md border border-amber-200 shadow-sm">🟡 영업/답사</span>
+                <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-2 hover:bg-slate-100 rounded-full font-black">▶</button>
               </div>
             </div>
 
-            {/* 🛡️ Z폴드6 최적화: 가로 스크롤을 허용하여 달력 찌그러짐 방지 */}
-            <div className="overflow-x-auto no-scrollbar w-full">
-              <div className="min-w-[750px]">
-                <div className="calendar-grid">
-                  {['월','화','수','목','금','토','일'].map((d,i)=>(<div key={d} className={`p-3 text-center text-sm font-black bg-slate-50 ${i===6?'text-red-500':i===5?'text-blue-500':'text-slate-500'}`}>{d}</div>))}
-                  {calendarDays.map((d,i)=>(
-                    <div key={i} className={`calendar-cell ${!d?'bg-slate-50/40':''}`}>
+            <div className="flex-1 overflow-x-auto overflow-y-auto no-scrollbar bg-slate-50 p-2 md:p-4">
+              <div className="min-w-[700px] h-full flex flex-col shadow-sm rounded-xl overflow-hidden">
+                <div className="grid grid-cols-7 gap-px bg-slate-200 border-b border-slate-200 shrink-0">
+                  {['월','화','수','목','금','토','일'].map((d,i)=>(<div key={d} className={`py-2 text-center text-sm font-black bg-white ${i===6?'text-red-500':i===5?'text-blue-500':'text-slate-600'}`}>{d}</div>))}
+                </div>
+                <div className="grid grid-cols-7 gap-px bg-slate-200 flex-1">
+                  {calendarDays.map((d, i) => (
+                    <div key={i} onClick={() => d && openDailyList(d.dateStr, d.dayEvents)} className={`calendar-cell flex flex-col ${!d?'bg-slate-50/50 cursor-default':''}`}>
                       {d && (
                         <>
-                          <div className={`text-right text-xs font-bold mb-1.5 ${new Date().toISOString().split('T')[0] === d.dateStr ? 'text-white bg-blue-600 inline-block float-right px-2 py-0.5 rounded-full' : 'text-slate-400'}`}>{d.day}</div>
-                          <div className="clear-both"></div>
-                          <div className="space-y-1.5">
-                            {d.dayEvents.map((ev,idx)=>(
-                              <div key={idx} onClick={() => onEventClick(ev)} className={`px-2 py-1.5 rounded-md text-[11px] font-bold truncate shadow-sm border ${ev.type==='burial'?'bg-emerald-600 text-white border-emerald-700':'bg-amber-400 text-amber-900 border-amber-500'}`}>
-                                {ev.title}
-                              </div>
-                            ))}
+                          <div className={`text-right text-xs font-bold mb-1 p-1 ${new Date().toISOString().split('T')[0] === d.dateStr ? 'text-white bg-blue-600 inline-block self-end rounded-md px-2 py-0.5' : 'text-slate-400'}`}>{d.day}</div>
+                          <div className="space-y-1 flex-1 overflow-y-auto no-scrollbar pb-1">
+                            {d.dayEvents.map((ev, idx) => {
+                              const isCancel = ev.status === '취소';
+                              const isDone = ev.status === '답사완료' || ev.status === '안치확정';
+                              let style = ev.type === 'burial' 
+                                ? 'bg-emerald-600 text-white border-emerald-700' 
+                                : (isCancel ? 'bg-slate-100 text-slate-400 line-through border-slate-200' : isDone ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-amber-300 text-amber-900 border-amber-400');
+                              let icon = ev.type === 'burial' ? '🟢' : (isCancel ? '❌' : isDone ? '✅' : '🟡');
+                              
+                              return (
+                                <div key={idx} className={`px-1.5 py-1 rounded text-[10px] font-bold truncate shadow-sm border ${style}`}>
+                                  {icon} {ev.title}
+                                </div>
+                              );
+                            })}
                           </div>
                         </>
                       )}
@@ -181,33 +196,86 @@
               </div>
             </div>
           </div>
+
+          {/* 📅 공유앱 구조 이식: Daily List Modal */}
+          <Modal isOpen={dailyModal.isOpen} onClose={() => setDailyModal({ ...dailyModal, isOpen: false })} title={`📅 ${dailyModal.date} 일정 상세`}>
+            {dailyModal.events.length === 0 ? (
+              <div className="text-center p-10 text-slate-400 font-bold">이 날짜에 등록된 일정이 없습니다.</div>
+            ) : (
+              <div className="space-y-3">
+                {dailyModal.events.map((ev, idx) => {
+                  const isCancel = ev.status === '취소';
+                  const isDone = ev.status === '답사완료' || ev.status === '안치확정';
+                  
+                  if (ev.type === 'sales') {
+                    const bg = isCancel ? "bg-slate-100 border-slate-200 text-slate-400" : (isDone ? "bg-blue-50 border-blue-200 text-blue-800" : "bg-yellow-50 border-amber-300 text-amber-900");
+                    const icon = isCancel ? "❌" : (isDone ? "✅" : "🟡");
+                    const textDec = isCancel ? "line-through" : "none";
+                    return (
+                      <div key={idx} className={`p-4 rounded-xl border shadow-sm ${bg}`}>
+                        <div className="font-black text-[13px] mb-1" style={{textDecoration: textDec}}>
+                          {icon} [영업] {ev.sub} - {ev.title} ({ev.status})
+                        </div>
+                        <div className="text-[11px] font-bold opacity-70 mt-2 whitespace-pre-wrap">{clean(ev.raw.비고메모) || '기록된 메모 없음'}</div>
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <div key={idx} className="p-4 rounded-xl border border-emerald-700 bg-emerald-600 text-white shadow-sm">
+                        <div className="font-black text-[13px] mb-1">🟢 [안치] {ev.title} ({ev.sub || '위치미상'})</div>
+                        <div className="text-[11px] font-medium opacity-90 mt-2 whitespace-pre-wrap">{clean(ev.raw.비고) || '특이사항 없음'}</div>
+                      </div>
+                    );
+                  }
+                })}
+              </div>
+            )}
+          </Modal>
         </div>
       );
     }
 
     // ==========================================
-    // 🔍 View: Field Map (Real Layout Engine)
+    // 🔍 View: Field Map (Real Layout & Smart Sort)
     // ==========================================
-    function FieldView({ onSlotClick }) {
+    function FieldView() {
       const [loading, setLoading] = useState(true);
       const [data, setData] = useState([]);
       const [area, setArea] = useState('A6/가');
+      const [slotModal, setSlotModal] = useState({ isOpen: false, data: null });
 
       useEffect(() => {
         const fetchField = async () => {
           setLoading(true);
-          const { data } = await supabaseClient.from('field_data').select('*').eq('구역', area).order('위치_번호', { ascending: true });
-          setData(data || []);
+          // 1. Supabase에서 해당 구역 데이터 전체 호출
+          const res = await supabaseClient.from('field_data').select('*').eq('구역', area);
+          let rawData = res.data || [];
+
+          // 2. 🧠 물리적 지형 복제 엔진 (행 오름차순, 열 내림차순 정렬)
+          // "염홍동(1-1) 박스가 가장 오른쪽에 있어야 한다"는 규칙을 구현.
+          rawData.sort((a, b) => {
+            const parse = (str) => {
+              const matches = String(str).match(/(\d+)/g);
+              return matches ? matches.map(Number) : [0];
+            };
+            const pA = parse(a.위치_번호);
+            const pB = parse(b.위치_번호);
+            
+            if (pA[0] !== pB[0]) return pA[0] - pB[0]; // 행(Row)은 위에서 아래로 (오름차순)
+            if (pA.length > 1 && pB.length > 1) return pB[1] - pA[1]; // 열(Col)은 우측이 1번이 되도록 (내림차순)
+            return 0;
+          });
+
+          setData(rawData);
           setLoading(false);
         };
         fetchField();
       }, [area]);
 
-      // 🗺️ 물리적 레이아웃 계산 로직 (ROW_CONFIG 매핑)
       const renderedRows = useMemo(() => {
         const rows = [];
         let currentIndex = 0;
-        const config = ROW_CONFIG[area] || [20, 20]; // Default fallback
+        const config = ROW_CONFIG[area] || [20, 20];
         
         config.forEach(count => {
           const rowData = data.slice(currentIndex, currentIndex + count);
@@ -215,7 +283,6 @@
           currentIndex += count;
         });
         
-        // 만약 DB 데이터가 설정된 Config보다 많다면, 남은 데이터를 마지막 줄에 뿌림
         if (currentIndex < data.length) {
             rows.push(data.slice(currentIndex));
         }
@@ -223,28 +290,23 @@
       }, [data, area]);
 
       return (
-        <div className="space-y-4 max-w-7xl mx-auto flex flex-col h-[calc(100vh-120px)]">
-          {/* 구역 선택 네비게이션 */}
+        <div className="space-y-4 max-w-7xl mx-auto flex flex-col h-[calc(100vh-100px)]">
           <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar shrink-0 border-b border-slate-200">
             {SECTION_LIST.map(s => (
-              <button 
-                key={s} 
-                onClick={() => setArea(s)}
-                className={`px-4 py-2.5 rounded-t-xl font-bold text-[13px] whitespace-nowrap transition-all border-t border-l border-r ${area === s ? 'bg-white text-slate-900 border-slate-200 border-b-white translate-y-[1px]' : 'bg-slate-100 text-slate-500 border-transparent hover:bg-slate-200'}`}
-              >
+              <button key={s} onClick={() => setArea(s)} className={`px-4 py-2.5 rounded-t-xl font-bold text-[13px] whitespace-nowrap transition-all border-t border-l border-r ${area === s ? 'bg-white text-slate-900 border-slate-200 border-b-white translate-y-[1px]' : 'bg-slate-100 text-slate-500 border-transparent hover:bg-slate-200'}`}>
                 {s}
               </button>
             ))}
           </div>
 
-          {/* 🗺️ 스크롤 가능한 맵 캔버스 */}
+          {/* 🗺️ B6 구역 등 2D 거대 스크롤 캔버스 */}
           <div className="bg-white p-4 md:p-8 rounded-b-2xl rounded-tr-2xl shadow-xl border border-slate-200 flex-1 overflow-auto">
             {loading ? (
               <div className="flex h-full items-center justify-center font-black text-slate-300 animate-pulse tracking-widest text-lg">MAP SYNCHRONIZING...</div>
             ) : renderedRows.length === 0 ? (
               <div className="flex h-full items-center justify-center font-bold text-slate-400">데이터가 없습니다.</div>
             ) : (
-              <div className="w-max mx-auto pb-10 pr-10"> {/* 내부 여백을 주어 끝부분이 잘리지 않게 함 */}
+              <div className="w-max mx-auto pb-10 pr-10">
                 {renderedRows.map((row, rIdx) => (
                   <div key={rIdx} className="map-row">
                     {row.map((s, sIdx) => {
@@ -257,7 +319,7 @@
                         '미분양': 'bg-white text-slate-400 border-slate-300'
                       };
                       return (
-                        <div key={sIdx} onClick={() => onSlotClick(s)} className={`map-slot ${colors[status] || colors['미분양']}`}>
+                        <div key={sIdx} onClick={() => setSlotModal({ isOpen: true, data: s })} className={`map-slot ${colors[status] || colors['미분양']}`}>
                           <div className={`slot-id ${status==='미분양'?'text-slate-400':'text-inherit'}`}>{s.위치_번호}</div>
                           <div className={`slot-name ${status==='미분양'?'opacity-30':'opacity-100'}`}>{clean(s.성함) || clean(s.계약자) || 'EMPTY'}</div>
                         </div>
@@ -268,6 +330,51 @@
               </div>
             )}
           </div>
+
+          {/* 🗺️ 공유앱 완벽 이식: 현장 슬롯 상세 정보 모달 */}
+          <Modal isOpen={slotModal.isOpen} onClose={() => setSlotModal({ ...slotModal, isOpen: false })} title={`🗺️ ${slotModal.data?.구역} ${slotModal.data?.위치_번호}`}>
+            {slotModal.data && (
+              <div className="space-y-3">
+                <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400">안치자 (성함)</p>
+                    <p className="text-xl font-black text-slate-800">{clean(slotModal.data.성함) || '-'}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-black text-slate-400">현재 상태</p>
+                    <p className="text-lg font-black text-blue-600">{clean(slotModal.data.계약_상태) || '미분양'}</p>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                    <p className="text-[10px] font-black text-slate-400 mb-1">계약자</p>
+                    <p className="font-bold text-slate-800">{clean(slotModal.data.계약자) || '-'}</p>
+                  </div>
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                    <p className="text-[10px] font-black text-slate-400 mb-1">기수</p>
+                    <p className="font-bold text-slate-800">{clean(slotModal.data.기수) ? `${slotModal.data.기수}기` : '-'}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                    <p className="text-[10px] font-black text-slate-400 mb-1">분양가</p>
+                    <p className="font-bold text-amber-600">{formatMoney(slotModal.data.가격)}</p>
+                  </div>
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                    <p className="text-[10px] font-black text-slate-400 mb-1">관리비</p>
+                    <p className="font-bold text-amber-600">{formatMoney(slotModal.data.관리비)}</p>
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm mt-2">
+                  <p className="text-[10px] font-black text-slate-400 mb-2">비고 (현장 메모)</p>
+                  <p className="text-sm font-medium text-slate-600 whitespace-pre-wrap">{clean(slotModal.data.메모) || '기록된 메모가 없습니다.'}</p>
+                </div>
+              </div>
+            )}
+          </Modal>
         </div>
       );
     }
@@ -278,73 +385,6 @@
     function App() {
       const [activeTab, setActiveTab] = useState('dash');
       const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-      const [modal, setModal] = useState({ isOpen: false, title: '', content: null });
-
-      const openModal = (title, content) => setModal({ isOpen: true, title, content });
-      const closeModal = () => setModal({ ...modal, isOpen: false });
-
-      // 모달 렌더링 로직 (달력 이벤트용)
-      const handleEventClick = (ev) => {
-        const content = (
-          <div className="space-y-5">
-            <div className="flex gap-3">
-              <div className="flex-1 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                <p className="text-[11px] font-black text-slate-400 mb-1">일자</p>
-                <p className="font-bold text-slate-800">{ev.date}</p>
-              </div>
-              <div className="flex-1 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                <p className="text-[11px] font-black text-slate-400 mb-1">구분</p>
-                <p className={`font-bold ${ev.type==='burial'?'text-emerald-600':'text-amber-600'}`}>{ev.type==='burial'?'안치 일정':'영업/답사'}</p>
-              </div>
-            </div>
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-              <p className="text-[11px] font-black text-slate-400 mb-1">대상자 / 관련 정보</p>
-              <p className="text-lg font-black text-slate-900 mb-1">{ev.title}</p>
-              <p className="text-sm font-bold text-slate-600">{ev.sub}</p>
-            </div>
-            {ev.raw.비고 && (
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                <p className="text-[11px] font-black text-slate-400 mb-2">메모 / 특이사항</p>
-                <p className="text-sm text-slate-700 whitespace-pre-wrap font-medium">{clean(ev.raw.비고)}</p>
-              </div>
-            )}
-          </div>
-        );
-        openModal(ev.type === 'burial' ? '⚰️ 안치 상세 내역' : '🤝 영업/답사 내역', content);
-      };
-
-      // 모달 렌더링 로직 (현장 슬롯용)
-      const handleSlotClick = (s) => {
-        const content = (
-          <div className="space-y-4">
-            <div className="flex justify-between items-center bg-slate-100 p-4 rounded-xl border border-slate-200">
-              <div>
-                <p className="text-[10px] font-black text-slate-400">구역 / 번호</p>
-                <p className="text-xl font-black text-slate-800">{s.구역} {s.위치_번호}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-[10px] font-black text-slate-400">현재 상태</p>
-                <p className="text-lg font-black text-blue-600">{clean(s.계약_상태) || '미분양'}</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                <p className="text-[10px] font-black text-slate-400 mb-1">안치자 (성함)</p>
-                <p className="font-bold text-slate-800">{clean(s.성함) || '-'}</p>
-              </div>
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                <p className="text-[10px] font-black text-slate-400 mb-1">계약자</p>
-                <p className="font-bold text-slate-800">{clean(s.계약자) || '-'}</p>
-              </div>
-            </div>
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-              <p className="text-[10px] font-black text-slate-400 mb-2">메모 (현장 이슈)</p>
-              <p className="text-sm font-medium text-slate-600 whitespace-pre-wrap">{clean(s.메모) || '기록된 메모가 없습니다.'}</p>
-            </div>
-          </div>
-        );
-        openModal('🗺️ 현장 슬롯 상세 정보', content);
-      };
 
       return (
         <div className="flex h-screen overflow-hidden">
@@ -352,7 +392,7 @@
           {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setIsSidebarOpen(false)} />}
           <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 lg:static lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform shadow-2xl lg:shadow-none`}>
             <div className="p-6 border-b border-slate-800 flex justify-between items-center">
-              <h1 className="text-xl font-black text-white tracking-tighter">JAKE WorkOS <span className="text-xs bg-blue-600 px-1.5 py-0.5 rounded ml-1">V10</span></h1>
+              <h1 className="text-xl font-black text-white tracking-tighter">JAKE WorkOS <span className="text-xs bg-blue-600 px-1.5 py-0.5 rounded ml-1">V11</span></h1>
               <button className="lg:hidden text-slate-400 font-bold" onClick={() => setIsSidebarOpen(false)}>✕</button>
             </div>
             <nav className="p-4 space-y-8 overflow-y-auto h-[calc(100vh-80px)] no-scrollbar">
@@ -376,25 +416,22 @@
 
           {/* Main Content */}
           <main className="flex-1 flex flex-col h-screen overflow-hidden">
-            <header className="h-16 bg-white border-b border-slate-200 flex items-center px-6 justify-between shrink-0 shadow-sm z-10">
+            <header className="h-14 bg-white border-b border-slate-200 flex items-center px-6 justify-between shrink-0 shadow-sm z-10">
               <div className="flex items-center">
                 <button className="lg:hidden p-2 text-slate-500 bg-slate-100 rounded-lg mr-4" onClick={() => setIsSidebarOpen(true)}>☰</button>
-                <h2 className="font-black text-xl text-slate-800 uppercase tracking-tighter">{activeTab === 'dash' ? 'Integrated Dashboard' : 'Field Management'}</h2>
+                <h2 className="font-black text-lg text-slate-800 uppercase tracking-tighter">{activeTab === 'dash' ? 'Integrated Dashboard' : 'Field Management'}</h2>
               </div>
               <div className="flex items-center space-x-2">
-                <span className="text-[10px] font-black text-slate-400 hidden sm:inline">DATABASE CONNECTED</span>
+                <span className="text-[10px] font-black text-slate-400 hidden sm:inline">DATABASE SECURED</span>
                 <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></div>
               </div>
             </header>
 
-            <div className="flex-1 overflow-y-auto p-4 md:p-8 no-scrollbar bg-[#F8FAFC]">
-              {activeTab === 'dash' && <DashboardView onEventClick={handleEventClick} />}
-              {activeTab === 'field' && <FieldView onSlotClick={handleSlotClick} />}
+            <div className="flex-1 overflow-hidden bg-[#F8FAFC]">
+              {activeTab === 'dash' && <DashboardView />}
+              {activeTab === 'field' && <FieldView />}
             </div>
           </main>
-          
-          {/* Global Modal Injection */}
-          <Modal isOpen={modal.isOpen} onClose={closeModal} title={modal.title}>{modal.content}</Modal>
         </div>
       );
     }
