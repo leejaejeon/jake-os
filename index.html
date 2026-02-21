@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Jake WorkOS V17 - Diet & Stable Map</title>
+  <title>Jake WorkOS V18 - JSON Fetch Engine</title>
   
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -15,23 +15,20 @@
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
     body { font-family: 'Pretendard', sans-serif; background-color: #f1f5f9; color: #1e293b; -webkit-font-smoothing: antialiased; overflow: hidden; }
     
-    /* 스크롤바 디자인 */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: #f8fafc; border-radius: 4px; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     
-    /* 대시보드 달력 - 다이어트됨 */
     .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background-color: #e2e8f0; border: 1px solid #e2e8f0; }
     .calendar-cell { min-height: 100px; background-color: #fff; padding: 4px; cursor: pointer; }
     .calendar-cell:active { background-color: #f8fafc; }
 
-    /* 🗺️ 현장 지도 렌더링 물리 엔진 (완벽 다이어트) */
-    /* 왼쪽 정렬(flex-start)을 통해 엑셀의 순서(SPACER 포함)를 좌에서 우로 정직하게 구현 */
+    /* 🗺️ 현장 지도 렌더링 물리 엔진 */
     .map-row { display: flex; flex-direction: row; justify-content: flex-start; gap: 4px; margin-bottom: 4px; width: max-content; }
     .map-slot { width: 85px; min-width: 85px; height: 70px; border-radius: 4px; border: 1px solid #cbd5e1; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; }
-    .map-slot:active { opacity: 0.7; }
+    .map-slot:active { opacity: 0.7; transform: scale(0.98); }
     .slot-spacer { visibility: hidden; pointer-events: none; border: none; background: transparent; } 
     .slot-id { font-size: 10px; font-weight: 800; margin-bottom: 2px; }
     .slot-name { font-size: 11px; font-weight: 800; text-align: center; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 2px; letter-spacing: -0.5px; }
@@ -43,12 +40,10 @@
   <script type="text/babel">
     const { useState, useEffect, useMemo } = React;
 
-    // 🔐 Supabase Configuration
     const SUPABASE_URL = 'https://lqccxnciiajwqdmpwjdv.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxY2N4bmNpaWFqd3FkbXB3amR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MjA3MTMsImV4cCI6MjA4NzA5NjcxM30.L23-eq-DIPsbONOeX-xQ8UcMb7gtgTTTRpkaSm9HTw4';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // 🛡️ Data Sanitizer
     const clean = (val) => {
       if (!val || val === '0.0' || val === '0' || val === 'null' || val === ' -  - ' || val === 'SPACER') return '';
       return String(val).trim();
@@ -68,7 +63,6 @@
       } catch(e) { return '0원'; }
     };
 
-    // 📍 구역 정보 및 줄 바꿈 설정 (안전한 기본 변수)
     const SECTION_LIST = ['A2/가','A3/가','A4/가','A4/나','A4/다','A5/가','A5/나','A6/가','A6/나','B1/가','B2/가','B3/가','B4/가','B5/가','B6/가/1-12','B6/가/13-14','C1/가'];
     const ROW_CONFIG = { 
       'A2/가':[12], 'A3/가':[8,8], 'A4/가':[12,12,12,12,18,18,28,12], 'A4/나':[9,11,7,8,8], 'A4/다':[6,6], 'A5/가':[13,14,14,13,13,15,11], 
@@ -77,29 +71,6 @@
       'B6/가/1-12':[47,52,53,52,53,53,54,54,54,53,55,54,50], 'B6/가/13-14':[75,75,75,75,75,75,75,75,75] 
     };
 
-    // 🚨 에러 바운더리: 화면 하얗게 변하는 것 방지용 블랙박스
-    class ErrorBoundary extends React.Component {
-      constructor(props) { super(props); this.state = { hasError: false, error: null }; }
-      static getDerivedStateFromError(error) { return { hasError: true, error }; }
-      render() {
-        if (this.state.hasError) {
-          return (
-            <div className="p-8 m-4 bg-rose-50 border-2 border-rose-500 rounded-xl shadow-lg">
-              <h1 className="text-2xl font-black text-rose-700 mb-2">🚨 V17 시스템 오류 보고</h1>
-              <p className="text-sm font-bold text-rose-900 mb-4">React 렌더링 중 에러가 발생했습니다. 아래 내용을 복사해서 전달해주세요.</p>
-              <pre className="text-xs bg-white p-4 rounded border border-rose-200 overflow-auto text-slate-800">
-                {this.state.error && this.state.error.toString()}
-                {'\n\n'}
-                {this.state.error && this.state.error.stack}
-              </pre>
-            </div>
-          );
-        }
-        return this.props.children; 
-      }
-    }
-
-    // 🧱 모달창 컴포넌트
     function Modal({ isOpen, onClose, title, children }) {
       if (!isOpen) return null;
       return (
@@ -118,7 +89,6 @@
       );
     }
 
-    // 📊 대시보드 뷰
     function DashboardView() {
       const [loading, setLoading] = useState(true);
       const [events, setEvents] = useState([]);
@@ -136,9 +106,7 @@
             const bEvs = (burRes.data || []).map(b => ({ type:'burial', date:normalizeDate(b.안치일), title:clean(b.고인명), sub:clean(b.위치), raw:b }));
             const sEvs = (salRes.data || []).map(s => {
               const custName = clean(s['고객(고인)명'] || s.고객_고인_명 || s.고객고인명 || '이름없음');
-              return {
-                type:'sales', date:normalizeDate(s.답사일)||normalizeDate(s.등록일), title:custName, sub:`${clean(s.영업자사명)}/${clean(s.영업자성함)}`, status:s.현재상태, raw:s
-              };
+              return { type:'sales', date:normalizeDate(s.답사일)||normalizeDate(s.등록일), title:custName, sub:`${clean(s.영업자사명)}/${clean(s.영업자성함)}`, status:s.현재상태, raw:s };
             }).filter(s => s.status !== '상담 후 대기');
             setEvents([...bEvs, ...sEvs].filter(e => e.date !== null));
           } catch (e) { console.error("Dashboard Fetch Error:", e); } finally { setLoading(false); }
@@ -196,7 +164,6 @@
               </div>
             </div>
           </div>
-
           <Modal isOpen={dailyModal.isOpen} onClose={()=>setDailyModal({...dailyModal, isOpen:false})} title={`📅 ${dailyModal.date} 일정`}>
             {dailyModal.events.length === 0 ? <div className="text-center p-8 text-slate-400 font-bold">일정이 없습니다.</div> : (
               <div className="space-y-2">
@@ -227,19 +194,28 @@
       );
     }
 
-    // 🔍 맵 뷰 (가장 안전한 로직)
+    // 🚀 현장 지도 뷰 (JSON 비동기 로딩 방식)
     function FieldView() {
       const [loading, setLoading] = useState(true);
       const [data, setData] = useState([]);
       const [area, setArea] = useState('A6/가');
       const [slotModal, setSlotModal] = useState({ isOpen: false, data: null });
+      const [layoutData, setLayoutData] = useState({}); // 분리된 JSON 파일을 담을 그릇
 
+      // 1단계: 외부 JSON 도면 파일 비동기 호출
+      useEffect(() => {
+        fetch('/map_layout.json')
+          .then(res => res.json())
+          .then(json => setLayoutData(json))
+          .catch(err => console.error("Layout JSON Load Error:", err));
+      }, []);
+
+      // 2단계: Supabase 데이터 호출
       useEffect(() => {
         const fetchField = async () => {
           setLoading(true);
           try {
-            // DB에 있는 순서(id 기준)대로 그대로 가져옵니다. (SPACER 포함됨)
-            const res = await supabaseClient.from('field_data').select('*').eq('구역', area).order('id', { ascending: true });
+            const res = await supabaseClient.from('field_data').select('*').eq('구역', area);
             setData(res.data || []);
           } catch(e) { console.error("Map Fetch Error:", e); }
           setLoading(false);
@@ -247,28 +223,45 @@
         fetchField();
       }, [area]);
 
-      // DB의 데이터를 ROW_CONFIG 설정에 맞춰 단순 분할(Chunking) 합니다.
-      const renderedRows = useMemo(() => {
-        if (!data || data.length === 0) return [];
-        const rows = [];
-        let curIndex = 0;
-        const config = ROW_CONFIG[area] || [20];
+      // 3단계: 도면(JSON) + 데이터(DB) 결합 엔진
+      const renderedGrid = useMemo(() => {
+        if (!layoutData || Object.keys(layoutData).length === 0) return []; // JSON 로딩 전 방어
         
-        config.forEach(count => {
-          const chunk = data.slice(curIndex, curIndex + count);
-          if(chunk.length > 0) rows.push(chunk);
-          curIndex += count;
+        const dataMap = {};
+        data.forEach(item => { if (item.위치_번호) dataMap[item.위치_번호] = item; });
+
+        const comp = layoutData[area] || [];
+        const flat = [];
+        
+        // 압축 해제 (_숫자 -> SPACER 반복)
+        comp.forEach(item => {
+            if (item.startsWith('_')) {
+                const count = parseInt(item.substring(1)) || 1;
+                for(let i=0; i<count; i++) flat.push('SPACER');
+            } else {
+                flat.push(item);
+            }
         });
         
-        if (curIndex < data.length) {
-            rows.push(data.slice(curIndex));
-        }
-        return rows;
-      }, [data, area]);
+        const config = ROW_CONFIG[area] || [20];
+        const rows = [];
+        let idx = 0;
+        config.forEach(cnt => {
+            rows.push(flat.slice(idx, idx + cnt));
+            idx += cnt;
+        });
+
+        return rows.map((rowSlots, rIdx) => ({
+            rowNum: rIdx + 1,
+            slots: rowSlots.map((slotId, sIdx) => {
+                if (slotId === 'SPACER') return { type: 'spacer', id: `spacer-${rIdx}-${sIdx}` };
+                return { type: 'data', ...(dataMap[slotId] || { 위치_번호: slotId, 계약_상태: '미분양' }) };
+            })
+        }));
+      }, [data, area, layoutData]);
 
       return (
         <div className="space-y-4 max-w-7xl mx-auto flex flex-col h-[calc(100vh-100px)]">
-          {/* ✅ 구역 탭 (모바일 가로 스크롤 완벽 적용) */}
           <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar border-b px-2 shrink-0">
             {SECTION_LIST.map(s => (
               <button key={s} onClick={() => setArea(s)} className={`px-4 py-2 rounded-t-lg font-bold text-[13px] whitespace-nowrap border-t border-l border-r shrink-0 ${area === s ? 'bg-white text-blue-600 border-slate-200 translate-y-[1px]' : 'bg-slate-100 text-slate-400 border-transparent'}`}>
@@ -278,30 +271,20 @@
           </div>
 
           <div className="bg-white p-4 md:p-8 rounded-b-xl shadow-sm border overflow-auto flex-1 relative">
-            {loading ? (
-              <div className="flex h-full items-center justify-center font-black text-slate-300">Map Building...</div>
+            {loading || Object.keys(layoutData).length === 0 ? (
+              <div className="flex h-full items-center justify-center font-black text-slate-300">SYSTEM LOADING...</div>
             ) : (
               <div className="w-max mx-auto pb-20 pr-20">
-                {renderedRows.map((row, rIdx) => (
-                  <div key={rIdx} className="map-row">
-                    {row.map((s, sIdx) => {
-                      // 투명 빈칸 처리 (엑셀의 SPACER)
-                      if (s.위치_번호 === 'SPACER' || !s.위치_번호) {
-                        return <div key={`spacer-${sIdx}`} className="map-slot slot-spacer"></div>;
-                      }
-
-                      const status = clean(s.계약_상태) || '미분양';
-                      const colors = {
-                        '안치': 'bg-emerald-700 text-white',
-                        '예약': 'bg-amber-300 text-amber-900',
-                        '계약금': 'bg-amber-100 text-amber-800',
-                        '홀딩': 'bg-rose-600 text-white',
-                        '미분양': 'bg-white text-slate-400'
-                      };
+                {renderedGrid.map((row) => (
+                  <div key={`row-${row.rowNum}`} className="map-row">
+                    {row.slots.map((s) => {
+                      if (s.type === 'spacer') return <div key={s.id} className="map-slot slot-spacer"></div>;
+                      const st = clean(s.계약_상태) || '미분양';
+                      const cols = { '안치':'bg-emerald-700 text-white', '예약':'bg-amber-300 text-amber-900', '계약금':'bg-amber-100 text-amber-800', '홀딩':'bg-rose-600 text-white', '미분양':'bg-white text-slate-400' };
                       return (
-                        <div key={s.id || sIdx} onClick={() => setSlotModal({ isOpen: true, data: s })} className={`map-slot ${colors[status] || colors['미분양']}`}>
-                          <div className={`slot-id ${status==='미분양'?'opacity-50':''}`}>{s.위치_번호}</div>
-                          <div className={`slot-name ${status==='미분양'?'opacity-30':''}`}>{clean(s.성함) || clean(s.계약자) || 'EMPTY'}</div>
+                        <div key={s.id || s.위치_번호} onClick={()=>setSlotModal({isOpen:true, data:s})} className={`map-slot ${cols[st] || cols['미분양']}`}>
+                          <div className="slot-id">{s.위치_번호}</div>
+                          <div className="slot-name">{clean(s.성함) || clean(s.계약자) || 'EMPTY'}</div>
                         </div>
                       );
                     })}
@@ -311,42 +294,20 @@
             )}
           </div>
 
-          {/* 현장 상세정보 모달 */}
-          <Modal isOpen={slotModal.isOpen} onClose={() => setSlotModal({ isOpen: false, data: null })} title={`🗺️ ${slotModal.data?.구역} ${slotModal.data?.위치_번호}`}>
+          <Modal isOpen={slotModal.isOpen} onClose={()=>setSlotModal({...slotModal, isOpen:false})} title={`🗺️ ${slotModal.data?.구역} ${slotModal.data?.위치_번호}`}>
             {slotModal.data && (
               <div className="space-y-3">
                 <div className="flex justify-between items-center bg-slate-100 p-4 rounded-lg border">
-                  <div>
-                    <p className="text-[10px] font-black text-slate-400">안치자 (성함)</p>
-                    <p className="text-xl font-black text-slate-800">{clean(slotModal.data.성함) || '-'}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] font-black text-slate-400">상태</p>
-                    <p className="text-lg font-black text-blue-600">{clean(slotModal.data.계약_상태) || '미분양'}</p>
-                  </div>
+                  <div><p className="text-[10px] font-black text-slate-400">안치자 (성함)</p><p className="text-xl font-black text-slate-800">{clean(slotModal.data.성함) || '-'}</p></div>
+                  <div className="text-right"><p className="text-[10px] font-black text-slate-400">상태</p><p className="text-lg font-black text-blue-600">{clean(slotModal.data.계약_상태) || '미분양'}</p></div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-white p-3 rounded-lg border shadow-sm">
-                    <p className="text-[10px] font-black text-slate-400 mb-1">계약자</p>
-                    <p className="font-bold text-sm">{clean(slotModal.data.계약자) || '-'}</p>
-                  </div>
-                  <div className="bg-white p-3 rounded-lg border shadow-sm">
-                    <p className="text-[10px] font-black text-slate-400 mb-1">기수</p>
-                    <p className="font-bold text-sm">{clean(slotModal.data.기수) ? `${slotModal.data.기수}기` : '-'}</p>
-                  </div>
-                  <div className="bg-white p-3 rounded-lg border shadow-sm">
-                    <p className="text-[10px] font-black text-slate-400 mb-1">분양가</p>
-                    <p className="font-bold text-amber-600 text-sm">{formatMoney(slotModal.data.가격)}</p>
-                  </div>
-                  <div className="bg-white p-3 rounded-lg border shadow-sm">
-                    <p className="text-[10px] font-black text-slate-400 mb-1">관리비</p>
-                    <p className="font-bold text-amber-600 text-sm">{formatMoney(slotModal.data.관리비)}</p>
-                  </div>
+                  <div className="bg-white p-3 rounded-lg border shadow-sm"><p className="text-[10px] font-black text-slate-400 mb-1">계약자</p><p className="font-bold text-sm">{clean(slotModal.data.계약자) || '-'}</p></div>
+                  <div className="bg-white p-3 rounded-lg border shadow-sm"><p className="text-[10px] font-black text-slate-400 mb-1">기수</p><p className="font-bold text-sm">{clean(slotModal.data.기수) ? `${slotModal.data.기수}기` : '-'}</p></div>
+                  <div className="bg-white p-3 rounded-lg border shadow-sm"><p className="text-[10px] font-black text-slate-400 mb-1">분양가</p><p className="font-bold text-amber-600 text-sm">{formatMoney(slotModal.data.가격)}</p></div>
+                  <div className="bg-white p-3 rounded-lg border shadow-sm"><p className="text-[10px] font-black text-slate-400 mb-1">관리비</p><p className="font-bold text-amber-600 text-sm">{formatMoney(slotModal.data.관리비)}</p></div>
                 </div>
-                <div className="bg-white p-4 rounded-lg border shadow-sm mt-2">
-                  <p className="text-[10px] font-black text-slate-400 mb-2">메모</p>
-                  <p className="text-xs font-medium text-slate-600 whitespace-pre-wrap">{clean(slotModal.data.메모) || '기록 없음'}</p>
-                </div>
+                <div className="bg-white p-4 rounded-lg border shadow-sm mt-2"><p className="text-[10px] font-black text-slate-400 mb-2">메모</p><p className="text-xs font-medium text-slate-600 whitespace-pre-wrap">{clean(slotModal.data.메모) || '기록 없음'}</p></div>
               </div>
             )}
           </Modal>
@@ -363,7 +324,7 @@
           {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setIsSidebarOpen(false)} />}
           <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 lg:static lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform shadow-2xl lg:shadow-none`}>
             <div className="p-6 border-b border-slate-800 flex justify-between items-center">
-              <h1 className="text-xl font-black text-white tracking-tighter">JAKE WorkOS <span className="text-xs bg-emerald-600 px-1.5 py-0.5 rounded ml-1 text-white">V17</span></h1>
+              <h1 className="text-xl font-black text-white tracking-tighter">JAKE WorkOS <span className="text-xs bg-emerald-600 px-1.5 py-0.5 rounded ml-1 text-white">V18</span></h1>
               <button className="lg:hidden text-slate-400 font-bold" onClick={() => setIsSidebarOpen(false)}>✕</button>
             </div>
             <nav className="p-4 space-y-6 overflow-y-auto h-[calc(100vh-80px)] no-scrollbar">
@@ -373,6 +334,13 @@
                   <button onClick={() => {setActiveTab('dash'); setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'dash' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'}`}>📊 통합 대시보드</button>
                   <button onClick={() => {setActiveTab('field'); setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'field' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'}`}>🔍 현장관리 (Map)</button>
                   <button className="w-full flex items-center px-4 py-3 rounded-xl font-bold text-sm text-slate-600 cursor-not-allowed">🏖️ 근태관리 (대기중)</button>
+                </div>
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-slate-500 mb-3 ml-2 uppercase tracking-widest">WorkOS (Jake)</p>
+                <div className="space-y-1">
+                  <button className="w-full flex items-center px-4 py-3 rounded-xl font-bold text-sm text-slate-600 cursor-not-allowed">🚀 프로젝트 (대기중)</button>
+                  <button className="w-full flex items-center px-4 py-3 rounded-xl font-bold text-sm text-slate-600 cursor-not-allowed">⚰️ 각인관리 (대기중)</button>
                 </div>
               </div>
             </nav>
@@ -395,12 +363,7 @@
     }
 
     const root = ReactDOM.createRoot(document.getElementById('root'));
-    // 🚨 컴파일이나 렌더링 에러 시 하얀 화면 대신 원인 출력
-    root.render(
-      <ErrorBoundary>
-        <App />
-      </ErrorBoundary>
-    );
+    root.render(<App />);
   </script>
 </body>
 </html>
