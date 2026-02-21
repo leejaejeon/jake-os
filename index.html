@@ -1,107 +1,26 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Jake WorkOS - V4</title>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <style>
-    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
-    body { font-family: 'Pretendard', sans-serif; background-color: #f8fafc; overscroll-behavior-y: none; }
-    .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-  </style>
-</head>
-<body>
-  <div id="root"></div>
-
-  <script type="text/babel">
-    const { useState, useEffect, useMemo } = React;
-
-    const SUPABASE_URL = 'https://lqccxnciiajwqdmpwjdv.supabase.co';
-    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxY2N4bmNpaWFqd3FkbXB3amR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MjA3MTMsImV4cCI6MjA4NzA5NjcxM30.L23-eq-DIPsbONOeX-xQ8UcMb7gtgTTTRpkaSm9HTw4';
-    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-    // ==========================================
-    // 🛠️ 유틸리티: 날짜 형식 통일 (Zero-Failure)
-    // ==========================================
-    const formatDate = (dateInput) => {
-      if (!dateInput) return null;
-      try {
-        const d = new Date(dateInput);
-        if (isNaN(d.getTime())) return null;
-        return d.toISOString().split('T')[0]; // 항상 YYYY-MM-DD 반환
-      } catch { return null; }
-    };
-
-    function Layout({ activeTab, setActiveTab, children }) {
-      const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-      const navItems = [
-        { id: 'dashboard', icon: '📊', label: '통합 대시보드' },
-        { id: 'field', icon: '🔍', label: '현장 관리 (Grid)' },
-        { id: 'engraving', icon: '⚰️', label: '각인 관리' },
-        { id: 'project', icon: '🚀', label: '프로젝트 (WorkOS)' }
-      ];
-
-      return (
-        <div className="flex h-screen overflow-hidden text-slate-800">
-          {isSidebarOpen && <div className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden" onClick={() => setIsSidebarOpen(false)} />}
-          <aside className={`fixed md:static inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 transform transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} flex flex-col`}>
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h1 className="font-bold text-xl text-slate-800 tracking-tight">🌲 Jake WorkOS</h1>
-              <button className="md:hidden text-slate-500 font-bold text-xl" onClick={() => setIsSidebarOpen(false)}>✕</button>
-            </div>
-            <nav className="p-4 space-y-2 flex-1 overflow-y-auto no-scrollbar">
-              {navItems.map(item => (
-                <button
-                  key={item.id}
-                  onClick={() => { setActiveTab(item.id); setIsSidebarOpen(false); }}
-                  className={`w-full text-left p-3 rounded-lg font-bold transition shadow-sm ${activeTab === item.id ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100 bg-white border border-transparent'}`}
-                >
-                  {item.icon} {item.label}
-                </button>
-              ))}
-            </nav>
-          </aside>
-          <main className="flex-1 flex flex-col h-screen overflow-hidden bg-slate-50">
-            <header className="h-14 bg-white border-b border-slate-200 flex items-center px-4 shrink-0 shadow-sm z-10 justify-between">
-              <div className="flex items-center">
-                <button className="md:hidden p-2 text-slate-600 rounded-md bg-gray-100 mr-3" onClick={() => setIsSidebarOpen(true)}>☰</button>
-                <div className="font-bold text-lg text-slate-700">{navItems.find(i => i.id === activeTab)?.label}</div>
-              </div>
-            </header>
-            <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-24">{children}</div>
-          </main>
-        </div>
-      );
-    }
-
-    // ==========================================
-    // 📊 탭 1: Dashboard
-    // ==========================================
-    function DashboardView() {
-      const [loading, setLoading] = useState(true);
-      const [dataList, setDataList] = useState([]);
-      const [currentDate, setCurrentDate] = useState(new Date());
-
-      useEffect(() => { fetchData(); }, [currentDate]);
-
-      const fetchData = async () => {
+const fetchData = async () => {
         setLoading(true);
         try {
+          // 1. 실제_안치일정이 비어있지 않은 모든 데이터를 일단 가져옵니다.
           const { data, error } = await supabaseClient
             .from('view_master_dashboard')
             .select('*')
             .not('실제_안치일정', 'is', null);
 
           if (error) throw error;
-          setDataList(data || []);
-        } catch (error) { console.error("Error:", error); }
-        finally { setLoading(false); }
+          
+          // 2. 가져온 데이터 중 유효한 날짜 형식을 가진 것만 정리합니다.
+          const validData = (data || []).map(item => ({
+            ...item,
+            normDate: formatDate(item.실제_안치일정) // YYYY-MM-DD 형식으로 통일
+          })).filter(item => item.normDate !== null);
+
+          setDataList(validData);
+        } catch (error) { 
+          console.error("데이터 매핑 에러:", error); 
+        } finally { 
+          setLoading(false); 
+        }
       };
 
       const calendarDays = useMemo(() => {
@@ -115,130 +34,9 @@
         for (let i = 0; i < startOffset; i++) days.push(null);
         for (let i = 1; i <= lastDate; i++) {
           const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-          const dayEvents = dataList.filter(row => formatDate(row.실제_안치일정) === dateStr);
+          // 3. 통일된 날짜(normDate)와 달력의 날짜(dateStr)를 비교합니다.
+          const dayEvents = dataList.filter(row => row.normDate === dateStr);
           days.push({ day: i, dateStr, events: dayEvents });
         }
         return days;
       }, [currentDate, dataList]);
-
-      const getCleanName = (ev) => {
-        let name = ev.마스터_고인명;
-        if (!name || name === '0.0' || name === '0') name = ev.마스터_계약자;
-        return name || '미상';
-      };
-
-      return (
-        <div className="space-y-6">
-          <div className="p-4 bg-white rounded-xl shadow-sm border border-slate-200">
-            <div className="flex justify-between items-center mb-4">
-              <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-2 border rounded">◀</button>
-              <h2 className="font-black text-xl">{currentDate.getFullYear()}년 {currentDate.getMonth() + 1}월</h2>
-              <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-2 border rounded">▶</button>
-            </div>
-            <div className="grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-lg overflow-hidden">
-              {['월', '화', '수', '목', '금', '토', '일'].map((d, i) => (
-                <div key={d} className={`p-2 text-center text-xs font-bold bg-slate-50 ${i === 6 ? 'text-red-500' : ''}`}>{d}</div>
-              ))}
-              {calendarDays.map((d, i) => (
-                <div key={i} className="bg-white min-h-[110px] p-1 border-t border-l border-slate-100">
-                  {d && (
-                    <>
-                      <div className="text-right text-xs font-bold text-slate-400 mb-1">{d.day}</div>
-                      <div className="space-y-1">
-                        {d.events.map((ev, idx) => (
-                          <div key={idx} className="text-[10px] bg-green-600 text-white p-1 rounded leading-tight shadow-sm font-bold truncate">
-                            {getCleanName(ev)}
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // ==========================================
-    // 🔍 탭 2: Field Map (Grid Slot View)
-    // ==========================================
-    function FieldView() {
-      const [loading, setLoading] = useState(true);
-      const [slots, setSlots] = useState([]);
-      const [selectedArea, setSelectedArea] = useState('A6'); // 기본 구역
-
-      useEffect(() => {
-        const fetchFieldData = async () => {
-          setLoading(true);
-          const { data } = await supabaseClient
-            .from('official_records')
-            .select('안치번호, 계약현황, 고인명, 계약자1')
-            .like('안치번호', `${selectedArea}%`);
-          setSlots(data || []);
-          setLoading(false);
-        };
-        fetchFieldData();
-      }, [selectedArea]);
-
-      return (
-        <div className="space-y-4">
-          <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-            {['A4', 'A5', 'A6', 'B2', 'B5'].map(area => (
-              <button 
-                key={area}
-                onClick={() => setSelectedArea(area)}
-                className={`px-4 py-2 rounded-full font-bold text-sm whitespace-nowrap ${selectedArea === area ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border'}`}
-              >
-                {area} 구역
-              </button>
-            ))}
-          </div>
-
-          <div className="bg-white p-4 rounded-xl border border-slate-200 min-h-[400px]">
-            {loading ? (
-              <div className="flex items-center justify-center h-48">데이터 분석 중...</div>
-            ) : (
-              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-10 gap-2">
-                {slots.map((slot, i) => (
-                  <div 
-                    key={i} 
-                    className={`aspect-square rounded-md p-1 flex flex-col items-center justify-center text-[9px] font-bold border ${
-                      slot.계약현황 === '장례' ? 'bg-green-100 border-green-300 text-green-800' :
-                      slot.계약현황 === '선분양' ? 'bg-blue-100 border-blue-300 text-blue-800' :
-                      'bg-slate-50 border-slate-200 text-slate-400'
-                    }`}
-                  >
-                    <div>{slot.안치번호.split('/').pop()}</div>
-                    <div className="truncate w-full text-center">{slot.고인명 || slot.계약자1 || ''}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    function App() {
-      const [activeTab, setActiveTab] = useState('dashboard');
-      return (
-        <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
-          {activeTab === 'dashboard' && <DashboardView />}
-          {activeTab === 'field' && <FieldView />}
-          {activeTab === 'engraving' && <PlaceholderView title="각인 관리" />}
-          {activeTab === 'project' && <PlaceholderView title="프로젝트 (WorkOS)" />}
-        </Layout>
-      );
-    }
-
-    function PlaceholderView({ title }) {
-      return <div className="p-20 text-center text-slate-400 font-bold">{title} 모듈 준비 중</div>;
-    }
-
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
-  </script>
-</body>
-</html>
