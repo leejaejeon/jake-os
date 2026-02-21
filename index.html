@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Jake WorkOS V13 - Absolute Map Sync</title>
+  <title>Jake WorkOS V14 - Absolute Grid Engine</title>
   
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -15,30 +15,28 @@
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
     body { font-family: 'Pretendard', sans-serif; background-color: #f1f5f9; color: #1e293b; -webkit-font-smoothing: antialiased; overflow: hidden; }
     
-    /* 가로/세로 무한 스크롤 디자인 */
+    /* 2D 스크롤바 최적화 */
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-track { background: #f8fafc; border-radius: 4px; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; border: 2px solid #f8fafc; }
     ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-    .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     
-    /* 대시보드 달력 */
+    /* 모바일 네비게이션 스크롤을 위한 특수 클래스 */
+    .nav-scroll { display: flex; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .nav-scroll::-webkit-scrollbar { display: none; }
+    
+    /* 달력 및 모달 애니메이션 */
     .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background-color: #e2e8f0; border: 1px solid #e2e8f0; }
     .calendar-cell { min-height: 110px; background-color: #fff; padding: 4px; transition: background 0.2s; cursor: pointer; }
     .calendar-cell:hover { background-color: #f8fafc; }
-    
-    .modal-enter { animation: fadeIn 0.2s ease-out; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .modal-enter { animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
 
-    /* 🗺️ 현실 지도 물리 엔진 (무보정 순수 출력) */
-    .map-row { display: flex; flex-direction: row; justify-content: flex-start; gap: 4px; margin-bottom: 4px; width: max-content; }
+    /* 🗺️ 절대 좌표 그리드 물리 엔진 CSS */
+    .map-row { display: flex; flex-direction: row; justify-content: flex-end; /* 우측부터 1-1이 시작되도록 우측 정렬 */ gap: 4px; margin-bottom: 4px; width: max-content; }
     .map-slot { width: 85px; min-width: 85px; height: 70px; border-radius: 6px; border: 1px solid #cbd5e1; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; transition: transform 0.1s, opacity 0.1s; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
     .map-slot:active { transform: scale(0.95); opacity: 0.8; }
-    
-    /* 투명한 빈 공간 (이것이 지도의 모양을 만듭니다) */
-    .slot-spacer { visibility: hidden; pointer-events: none; } 
-    
+    .slot-spacer { visibility: hidden; pointer-events: none; border: none; background: transparent; box-shadow: none; } 
     .slot-id { font-size: 10px; opacity: 0.8; font-weight: 800; margin-bottom: 2px; }
     .slot-name { font-size: 11px; font-weight: 800; text-align: center; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 2px; letter-spacing: -0.5px; }
   </style>
@@ -53,10 +51,7 @@
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxY2N4bmNpaWFqd3FkbXB3amR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MjA3MTMsImV4cCI6MjA4NzA5NjcxM30.L23-eq-DIPsbONOeX-xQ8UcMb7gtgTTTRpkaSm9HTw4';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // 🛡️ Data Sanitizer (Zero-Failure)
     const clean = (val) => (!val || val === '0.0' || val === '0' || val === 'null' || val === ' -  - ') ? '' : String(val).trim();
-    
-    // 달력 데이터 실종 방지용 방탄 날짜 엔진
     const normalizeDate = (v) => { 
       if(!v) return null; 
       const s = String(v).replace(/\./g,'-').replace(/\s/g,'').substring(0,10);
@@ -66,12 +61,13 @@
       }
       return null;
     };
-
     const formatMoney = (val) => {
       const num = parseInt(String(val).replace(/[^0-9]/g, ''));
       return isNaN(num) ? '0원' : num.toLocaleString() + '원';
     };
 
+    // 📍 절대 좌표계 설정을 위한 구역별 정보
+    // 배열의 각 숫자는 해당 행(Row)의 '최대 칸 수'를 의미합니다.
     const SECTION_LIST = ['A2/가','A3/가','A4/가','A4/나','A4/다','A5/가','A5/나','A6/가','A6/나','B1/가','B2/가','B3/가','B4/가','B5/가','B6/가/1-12','B6/가/13-14','C1/가'];
     const ROW_CONFIG = { 
       'A2/가':[12], 'A3/가':[8,8], 'A4/가':[12,12,12,12,18,18,28,12], 'A4/나':[9,11,7,8,8], 'A4/다':[6,6], 'A5/가':[13,14,14,13,13,15,11], 
@@ -80,9 +76,6 @@
       'B6/가/1-12':[47,52,53,52,53,53,54,54,54,53,55,54,50], 'B6/가/13-14':[75,75,75,75,75,75,75,75,75] 
     };
 
-    // ==========================================
-    // 🧱 Component: Global Modal System
-    // ==========================================
     function Modal({ isOpen, onClose, title, children }) {
       if (!isOpen) return null;
       return (
@@ -101,9 +94,6 @@
       );
     }
 
-    // ==========================================
-    // 📊 View: Unified Dashboard 
-    // ==========================================
     function DashboardView() {
       const [loading, setLoading] = useState(true);
       const [events, setEvents] = useState([]);
@@ -118,30 +108,17 @@
               supabaseClient.from('burial_schedule').select('*'),
               supabaseClient.from('status_mgmt').select('*')
             ]);
-
             const burialEvents = (burRes.data || []).map(b => ({
-              type: 'burial',
-              date: normalizeDate(b.안치일),
-              title: clean(b.고인명),
-              sub: clean(b.위치),
-              raw: b
+              type: 'burial', date: normalizeDate(b.안치일), title: clean(b.고인명), sub: clean(b.위치), raw: b
             }));
-
             const salesEvents = (salRes.data || []).map(s => {
               const custName = clean(s['고객(고인)명'] || s.고객_고인_명 || s.고객고인명 || '이름없음');
               return {
-                type: 'sales',
-                date: normalizeDate(s.답사일) || normalizeDate(s.등록일),
-                title: custName,
-                sub: `${clean(s.영업자사명)}/${clean(s.영업자성함)}`,
-                status: s.현재상태,
-                raw: s
+                type: 'sales', date: normalizeDate(s.답사일) || normalizeDate(s.등록일), title: custName, sub: `${clean(s.영업자사명)}/${clean(s.영업자성함)}`, status: s.현재상태, raw: s
               };
             }).filter(s => s.status !== '상담 후 대기');
-
             setEvents([...burialEvents, ...salesEvents].filter(e => e.date !== null));
-          } catch (e) { console.error(e); }
-          finally { setLoading(false); }
+          } catch (e) { console.error(e); } finally { setLoading(false); }
         };
         fetchAll();
       }, []);
@@ -218,7 +195,6 @@
                 {dailyModal.events.map((ev, idx) => {
                   const isCancel = ev.status === '취소';
                   const isDone = ev.status === '답사완료' || ev.status === '안치확정';
-                  
                   if (ev.type === 'sales') {
                     const bg = isCancel ? "bg-slate-100 border-slate-200 text-slate-400" : (isDone ? "bg-blue-50 border-blue-200 text-blue-800" : "bg-yellow-50 border-amber-300 text-amber-900");
                     const icon = isCancel ? "❌" : (isDone ? "✅" : "🟡");
@@ -248,7 +224,7 @@
     }
 
     // ==========================================
-    // 🔍 View: Field Map (🚀 절대 보존 렌더링 엔진)
+    // 🔍 View: Field Map (🚀 절대 그리드 강제 렌더링 엔진)
     // ==========================================
     function FieldView() {
       const [loading, setLoading] = useState(true);
@@ -259,58 +235,85 @@
       useEffect(() => {
         const fetchField = async () => {
           setLoading(true);
-          // ✅ 핵심: 어떤 조작도 하지 않고 DB에 들어있는 'id' 순서 그대로 가져옵니다.
-          const res = await supabaseClient.from('field_data').select('*').eq('구역', area).order('id', { ascending: true });
+          const res = await supabaseClient.from('field_data').select('*').eq('구역', area);
           setData(res.data || []);
           setLoading(false);
         };
         fetchField();
       }, [area]);
 
-      // 🗺️ ROW_CONFIG에 따라 무식하게(?) 배열을 자르기만 합니다. (절대 정렬 안 함)
-      const renderedRows = useMemo(() => {
-        const rows = [];
-        let currentIndex = 0;
-        const config = ROW_CONFIG[area] || [20];
-        
-        config.forEach(count => {
-          const rowData = data.slice(currentIndex, currentIndex + count);
-          if(rowData.length > 0) rows.push(rowData);
-          currentIndex += count;
+      // 🧠 절대 좌표 강제 삽입 엔진 (Jake의 로직 반영)
+      const renderedGrid = useMemo(() => {
+        const config = ROW_CONFIG[area];
+        if (!config) return [];
+
+        // 1. 데이터를 찾기 쉽게 Map(Dictionary)으로 변환
+        // 예: dataMap['1-12'] = { 성함: '박종석...', 계약자: '박봉수', ... }
+        const dataMap = {};
+        data.forEach(item => {
+          if (item.위치_번호 && item.위치_번호 !== 'SPACER') {
+            dataMap[item.위치_번호] = item;
+          }
         });
-        
-        if (currentIndex < data.length) {
-            rows.push(data.slice(currentIndex));
-        }
-        return rows;
+
+        // 2. config 배열을 바탕으로 가상의 뼈대(Grid)를 구축
+        return config.map((maxCols, rIdx) => {
+          const rowNum = rIdx + 1; // 1행, 2행...
+          const rowSlots = [];
+
+          // 3. 우측(1번)부터 좌측(maxCols번)까지 강제로 칸을 생성
+          for (let c = 1; c <= maxCols; c++) {
+            const posKey = `${rowNum}-${c}`; // 예: '1-1', '1-2', '2-23' ...
+            const matchedData = dataMap[posKey];
+
+            if (matchedData) {
+              // DB에 해당 위치 데이터가 있으면 데이터 렌더링
+              rowSlots.push({ type: 'data', ...matchedData });
+            } else {
+              // DB에 데이터가 없으면 '투명 박스'를 강제로 끼워넣어 뼈대를 유지시킴
+              rowSlots.push({ type: 'spacer', id: `blank-${posKey}` });
+            }
+          }
+
+          // 4. 특별 케이스 (A3/가 1-3-1, 1-3-2 처럼 불규칙한 번호 처리)
+          const irregulars = data.filter(item => {
+             const baseMatch = String(item.위치_번호).match(/^(\d+)-(\d+)/);
+             if (baseMatch && parseInt(baseMatch[1]) === rowNum) {
+                 // 규칙적인 번호(예: 1-5)가 아닌 예외 번호(예: 1-3-2)인 경우
+                 return !String(item.위치_번호).match(/^\d+-\d+$/);
+             }
+             return false;
+          });
+          
+          irregulars.forEach(irr => rowSlots.push({ type: 'data', ...irr }));
+
+          return { rowNum, slots: rowSlots };
+        });
       }, [data, area]);
 
       return (
         <div className="space-y-4 max-w-7xl mx-auto flex flex-col h-[calc(100vh-100px)]">
-          <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar shrink-0 border-b border-slate-200">
+          {/* ✅ 구역 탭 가로 스크롤 복구 (nav-scroll 클래스 적용) */}
+          <div className="nav-scroll pb-2 border-b border-slate-200 shrink-0 gap-2 px-2">
             {SECTION_LIST.map(s => (
-              <button key={s} onClick={() => setArea(s)} className={`px-4 py-2.5 rounded-t-xl font-bold text-[13px] whitespace-nowrap transition-all border-t border-l border-r ${area === s ? 'bg-white text-slate-900 border-slate-200 border-b-white translate-y-[1px]' : 'bg-slate-100 text-slate-500 border-transparent hover:bg-slate-200'}`}>
+              <button key={s} onClick={() => setArea(s)} className={`px-4 py-2.5 rounded-t-xl font-bold text-[13px] whitespace-nowrap transition-all border-t border-l border-r shrink-0 ${area === s ? 'bg-white text-slate-900 border-slate-200 border-b-white translate-y-[1px] shadow-[0_-2px_4px_rgba(0,0,0,0.02)]' : 'bg-slate-100 text-slate-500 border-transparent hover:bg-slate-200'}`}>
                 {s}
               </button>
             ))}
           </div>
 
+          {/* 🗺️ 거대 지도 스크롤 캔버스 */}
           <div className="bg-white p-4 md:p-8 rounded-b-2xl rounded-tr-2xl shadow-xl border border-slate-200 flex-1 overflow-auto relative">
             {loading ? (
-              <div className="flex h-full items-center justify-center font-black text-slate-300 animate-pulse tracking-widest text-lg">MAP SYNCHRONIZING...</div>
-            ) : renderedRows.length === 0 ? (
-              <div className="flex flex-col h-full items-center justify-center font-bold text-slate-400">
-                <span className="text-4xl mb-2">⚠️</span>
-                <span>이 구역의 데이터가 DB에 없습니다.</span>
-              </div>
+              <div className="flex h-full items-center justify-center font-black text-slate-300 animate-pulse tracking-widest text-lg">MAP BUILDING...</div>
             ) : (
               <div className="w-max mx-auto pb-10 pr-10">
-                {renderedRows.map((row, rIdx) => (
-                  <div key={rIdx} className="map-row">
-                    {row.map((s, sIdx) => {
-                      // ✅ 엑셀에서 넘어온 SPACER(빈칸) 데이터 처리 (투명 박스로 그리기)
-                      if (s.위치_번호 === 'SPACER') {
-                        return <div key={`spacer-${rIdx}-${sIdx}`} className="map-slot slot-spacer"></div>;
+                {renderedGrid.map((row) => (
+                  <div key={`row-${row.rowNum}`} className="map-row">
+                    {/* CSS에서 justify-content: flex-end 로 우측 정렬했으므로, 1번(배열 첫요소)이 가장 우측에 렌더링됨 */}
+                    {row.slots.map((s, sIdx) => {
+                      if (s.type === 'spacer') {
+                        return <div key={s.id} className="map-slot slot-spacer"></div>;
                       }
 
                       const status = clean(s.계약_상태) || '미분양';
@@ -322,7 +325,7 @@
                         '미분양': 'bg-white text-slate-400 border-slate-300'
                       };
                       return (
-                        <div key={s.id || sIdx} onClick={() => setSlotModal({ isOpen: true, data: s })} className={`map-slot ${colors[status] || colors['미분양']}`}>
+                        <div key={s.id || s.위치_번호} onClick={() => setSlotModal({ isOpen: true, data: s })} className={`map-slot ${colors[status] || colors['미분양']}`}>
                           <div className={`slot-id ${status==='미분양'?'text-slate-400':'text-inherit'}`}>{s.위치_번호}</div>
                           <div className={`slot-name ${status==='미분양'?'opacity-30':'opacity-100'}`}>{clean(s.성함) || clean(s.계약자) || 'EMPTY'}</div>
                         </div>
@@ -334,6 +337,7 @@
             )}
           </div>
 
+          {/* 📝 상세 정보 모달 */}
           <Modal isOpen={slotModal.isOpen} onClose={() => setSlotModal({ isOpen: false, data: null })} title={`🗺️ ${slotModal.data?.구역} ${slotModal.data?.위치_번호}`}>
             {slotModal.data && (
               <div className="space-y-3">
@@ -390,11 +394,10 @@
 
       return (
         <div className="flex h-screen overflow-hidden">
-          {/* Sidebar */}
           {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setIsSidebarOpen(false)} />}
           <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 lg:static lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform shadow-2xl lg:shadow-none`}>
             <div className="p-6 border-b border-slate-800 flex justify-between items-center">
-              <h1 className="text-xl font-black text-white tracking-tighter">JAKE WorkOS <span className="text-xs bg-emerald-600 px-1.5 py-0.5 rounded ml-1 text-white">V13</span></h1>
+              <h1 className="text-xl font-black text-white tracking-tighter">JAKE WorkOS <span className="text-xs bg-emerald-600 px-1.5 py-0.5 rounded ml-1 text-white">V14</span></h1>
               <button className="lg:hidden text-slate-400 font-bold" onClick={() => setIsSidebarOpen(false)}>✕</button>
             </div>
             <nav className="p-4 space-y-8 overflow-y-auto h-[calc(100vh-80px)] no-scrollbar">
@@ -416,7 +419,6 @@
             </nav>
           </aside>
 
-          {/* Main Content */}
           <main className="flex-1 flex flex-col h-screen overflow-hidden">
             <header className="h-14 bg-white border-b border-slate-200 flex items-center px-6 justify-between shrink-0 shadow-sm z-10">
               <div className="flex items-center">
@@ -424,7 +426,7 @@
                 <h2 className="font-black text-lg text-slate-800 uppercase tracking-tighter">{activeTab === 'dash' ? 'Integrated Dashboard' : 'Field Management'}</h2>
               </div>
               <div className="flex items-center space-x-2">
-                <span className="text-[10px] font-black text-slate-400 hidden sm:inline">DATA SECURED</span>
+                <span className="text-[10px] font-black text-slate-400 hidden sm:inline">DATA ALIGNED</span>
                 <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></div>
               </div>
             </header>
