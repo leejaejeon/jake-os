@@ -3,803 +3,226 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Jake Integrated OS Pro</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <title>Jake WorkOS - Master Dashboard</title>
+  
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
   <style>
-    body { background-color: #050505; color: #cbd5e1; font-family: 'Pretendard', sans-serif; overflow: hidden; }
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: #111; }
-    ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
-    .glass-panel { background: rgba(15, 15, 15, 0.98); border: 1px solid #222; }
-    
-    .status-미분양 { background-color: #f3f4f6; color: #111; border-color: #d1d5db; }
-    .status-예약 { background-color: #facc15; color: #422006; border-color: #ca8a04; }
-    .status-안치 { background-color: #14532d; color: #dcfce7; border-color: #166534; font-weight: bold; }
-    .status-홀딩 { background-color: #7c2d12; color: #ffedd5; border-color: #9a3412; }
-
-    /* 🎨 각인 상태 뱃지 */
-    .eng-badge { padding: 4px 8px; border-radius: 6px; font-weight: 900; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-width: 1px; cursor: pointer;}
-    .eng-접수 { background-color: #451a1a; color: #fca5a5; border-color: #991b1b; }
-    .eng-디자인완료 { background-color: #1e3a8a; color: #93c5fd; border-color: #2563eb; }
-    .eng-각인완료 { background-color: #713f12; color: #fde047; border-color: #ca8a04; }
-    .eng-설치완료 { background-color: #111; color: #666; border-color: #333; opacity: 0.8; }
-    
-    /* 🚨 네이티브 아코디언 */
-    details > summary { list-style: none; outline: none; cursor: pointer; }
-    details > summary::-webkit-details-marker { display: none; }
-    details[open] > summary ~ * { animation: sweep .2s ease-in-out; }
-    @keyframes sweep { 0% {opacity: 0; margin-top: -10px} 100% {opacity: 1; margin-top: 0px} }
-
-    .row-container { display: flex; flex-direction: row; gap: 4px; margin-bottom: 8px; width: max-content; }
-    .slot { width: 82px; height: 68px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-radius: 6px; font-size: 0.75rem; text-align: center; border: 1px solid transparent; cursor: pointer; transition: transform 0.1s; }
-    .slot:active { transform: scale(0.95); }
-    .slot-spacer { visibility: hidden; width: 82px; }
-
-    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: 1fr; gap: 1px; background-color: #222; flex: 1; min-height: 0; }
-    .calendar-day { background-color: #111; padding: 6px; cursor: pointer; transition: background 0.1s; display: flex; flex-direction: column; overflow: hidden;}
-    .calendar-day:hover { background-color: #1a1a1a; }
-    .calendar-day.today { border: 2px solid #facc15; background-color: #1a1e1a; }
-    
-    .jake-input { width: 100%; background-color: #0a0a0a; color: #e2e8f0; border: 1px solid #333; border-radius: 0.5rem; padding: 0.75rem; outline: none; font-size: 0.875rem; font-weight: bold; transition: border 0.2s; }
-    .jake-input:focus { border-color: #3b82f6; background-color: #000; }
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
+    body { font-family: 'Pretendard', sans-serif; background-color: #f8fafc; }
+    /* Z폴드6 등 모바일 스크롤 바운스 방지 */
+    html, body { overscroll-behavior-y: none; }
   </style>
 </head>
 <body>
   <div id="root"></div>
+
   <script type="text/babel">
-    const { useState, useEffect, useMemo, memo } = React;
-    const SUPABASE_URL = 'https://lqccxnciiajwqdmpwjdv.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxY2N4bmNpaWFqd3FkbXB3amR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MjA3MTMsImV4cCI6MjA4NzA5NjcxM30.L23-eq-DIPsbONOeX-xQ8UcMb7gtgTTTRpkaSm9HTw4';
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const { useState, useEffect } = React;
+    const { createClient } = supabase;
 
-    // 🚨 절대 서열 정리기
-    const getEngPriority = (status) => {
-      const s = String(status || '').trim();
-      if (s === '접수') return 0;
-      if (s === '디자인완료' || s === '시안대기') return 1;
-      if (s === '각인완료' || s === '작업중' || s === '각인') return 2;
-      if (s === '설치완료' || s === '완료') return 3;
-      return 0; // 예외값은 무조건 위로 (접수 취급)
-    };
-    const getEngClass = (status) => {
-      const p = getEngPriority(status);
-      if (p === 0) return 'eng-접수';
-      if (p === 1) return 'eng-디자인완료';
-      if (p === 2) return 'eng-각인완료';
-      if (p === 3) return 'eng-설치완료';
-      return 'eng-접수';
-    };
+    // ==========================================
+    // 🚨 [필수 입력] Supabase 연동 키 (따옴표 안에 입력)
+    // ==========================================
+    const SUPABASE_URL = '여기에_Project_URL_입력';
+    const SUPABASE_KEY = '여기에_anon_public_Key_입력';
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // 🚨 안전한 날짜 변환 함수 (빈칸은 1970년=0으로 만들어 맨 밑으로 내림)
-    const getSafeTime = (dateStr) => {
-      if (!dateStr || String(dateStr).trim() === '') return 0;
-      const t = new Date(dateStr).getTime();
-      return isNaN(t) ? 0 : t;
-    };
-
-    // [1. 탭 연동형 통합 검색]
-    function GlobalSearch({ onSelectResult, currentTab }) {
-      const [query, setQuery] = useState('');
-      const [results, setResults] = useState([]);
-      useEffect(() => {
-        if (query.trim().length < 2) { setResults([]); return; }
-        const t = setTimeout(async () => {
-          let tableName = 'master_locations';
-          if (currentTab === 'engraving') tableName = 'engravings';
-          if (currentTab === 'contact') tableName = 'contacts';
-          
-          try {
-            let data = [];
-            if (tableName === 'contacts') {
-              const res = await supabase.from('contacts').select('*').or(`company_name.ilike.%${query}%,manager_name.ilike.%${query}%`).limit(10);
-              data = res.data;
-            } else {
-              const res = await supabase.from(tableName).select('*').or(`deceased_name.ilike.%${query}%,contractor.ilike.%${query}%`).limit(10);
-              data = res.data;
-            }
-            setResults(data || []);
-          } catch(e) {}
-        }, 300);
-        return () => clearTimeout(t);
-      }, [query, currentTab]);
+    // ==========================================
+    // 🧩 컴포넌트 1: Layout (반응형 뼈대)
+    // ==========================================
+    function Layout({ children }) {
+      const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
       return (
-        <div className="relative w-full max-w-md z-[9999]">
-          <input type="text" placeholder={`통합 검색 (${currentTab === 'engraving' ? '각인DB' : currentTab === 'contact' ? '연락처DB' : '현장DB'})`} className="jake-input pl-4 shadow-2xl" value={query} onChange={(e) => setQuery(e.target.value)} />
-          {results.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-2 glass-panel rounded-xl shadow-[0_30px_60px_rgba(0,0,0,0.9)] z-[9999] p-1 border border-[#444] max-h-80 overflow-y-auto">
-              {results.map(res => (
-                <div key={res.id} onClick={() => { onSelectResult(res); setQuery(''); setResults([]); }} className="p-4 hover:bg-[#222] rounded-lg cursor-pointer border-b border-[#333] last:border-0 transition-colors">
-                  <div className="text-[10px] text-blue-400 font-bold mb-0.5">{currentTab === 'contact' ? res.category : (res.section || res.location || '위치미상')}</div>
-                  <div className="font-bold text-gray-100">{currentTab === 'contact' ? res.company_name : (res.deceased_name || '(공란)')} <span className="text-xs font-normal text-gray-500 ml-2">| {currentTab === 'contact' ? res.manager_name : res.contractor}</span></div>
-                </div>
-              ))}
-            </div>
+        <div className="flex h-screen overflow-hidden text-gray-800">
+          {/* 모바일(Z폴드6 외부화면) 사이드바 배경 오버레이 */}
+          {isSidebarOpen && (
+            <div 
+              className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+              onClick={() => setIsSidebarOpen(false)}
+            />
           )}
-        </div>
-      );
-    }
 
-    // 🗔 [각인 데이터 에디터 모달]
-    function EngravingEditorModal({ item, onClose }) {
-      const [formData, setFormData] = useState({ ...item });
-      const [isSaving, setIsSaving] = useState(false);
-      const isNew = !formData.id;
-
-      const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-      };
-
-      const handleSave = async () => {
-        if (!formData.deceased_name) return alert("고인명은 필수입니다.");
-        setIsSaving(true);
-        try {
-          if (isNew) {
-            await supabase.from('engravings').insert([{ ...formData, id: crypto.randomUUID(), status: formData.status || '접수' }]);
-          } else {
-            await supabase.from('engravings').update(formData).eq('id', formData.id);
-          }
-          window.location.reload(); 
-        } catch(e) { console.error(e); setIsSaving(false); }
-      };
-
-      const handleDelete = async () => {
-        if (!confirm("정말 이 데이터를 삭제하시겠습니까?")) return;
-        setIsSaving(true);
-        await supabase.from('engravings').delete().eq('id', formData.id);
-        window.location.reload();
-      };
-
-      return (
-        <div className="fixed inset-0 bg-black/90 z-[9999] flex items-center justify-center p-4" onClick={onClose}>
-          <div className="bg-[#111] border border-[#333] rounded-[2rem] w-full max-w-4xl p-8 shadow-2xl flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6 border-b border-[#222] pb-4 shrink-0">
-              <h3 className="text-2xl font-black text-white">{isNew ? '✨ 신규 각인 등록' : '📝 각인 데이터 편집'} <span className="text-blue-500 ml-2">{formData.deceased_name}</span></h3>
-              <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors"><i className="ph ph-x text-3xl" /></button>
+          {/* 사이드바 (PC: 고정 고정, 모바일: 슬라이드) */}
+          <aside className={`
+            fixed md:static inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-300
+            ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+          `}>
+            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h1 className="font-bold text-xl text-slate-800 tracking-tight">🌲 Jake WorkOS</h1>
+              <button className="md:hidden text-gray-500 font-bold text-xl" onClick={() => setIsSidebarOpen(false)}>✕</button>
             </div>
-            
-            <div className="overflow-y-auto flex-1 space-y-4 pr-2 custom-scrollbar">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">계약번호</label><input name="contract_no" value={formData.contract_no || ''} onChange={handleChange} className="jake-input" /></div>
-                <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">계약자명</label><input name="contractor" value={formData.contractor || ''} onChange={handleChange} className="jake-input" /></div>
-                <div className="space-y-1"><label className="text-[10px] font-black text-blue-400 uppercase">고인명 (필수)</label><input name="deceased_name" value={formData.deceased_name || ''} onChange={handleChange} className="jake-input border-blue-900" /></div>
-                <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">안치일정</label><input type="date" name="scheduled_date" value={formData.scheduled_date || ''} onChange={handleChange} className="jake-input" /></div>
-                
-                {/* 🚨 규격 및 종교 퀵 버튼 적용 */}
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-gray-500 uppercase">규격</label>
-                  <input name="size_spec" value={formData.size_spec || ''} onChange={handleChange} className="jake-input" placeholder="직접입력" />
-                  <div className="flex gap-1 mt-1 flex-wrap">
-                    <button onClick={(e)=>{e.preventDefault(); setFormData({...formData, size_spec:'160*100'})}} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">160*100</button>
-                    <button onClick={(e)=>{e.preventDefault(); setFormData({...formData, size_spec:'130*80'})}} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">130*80</button>
-                    <button onClick={(e)=>{e.preventDefault(); setFormData({...formData, size_spec:'100*62'})}} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">100*62</button>
-                  </div>
-                </div>
-                
-                <div className="space-y-1 col-span-2">
-                  <label className="text-[10px] font-black text-gray-500 uppercase">종교 / 특이사항</label>
-                  <input name="religion" value={formData.religion || ''} onChange={handleChange} className="jake-input" placeholder="직접입력" />
-                  <div className="flex gap-1 mt-1 flex-wrap">
-                    <button onClick={(e)=>{e.preventDefault(); setFormData({...formData, religion:'기본'})}} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">기본</button>
-                    <button onClick={(e)=>{e.preventDefault(); setFormData({...formData, religion:'사용자 요청 디자인'})}} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">요청 디자인</button>
-                    <button onClick={(e)=>{e.preventDefault(); setFormData({...formData, religion:'교회직분 추가'})}} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">교회직분</button>
-                    <button onClick={(e)=>{e.preventDefault(); setFormData({...formData, religion:'세례명 추가'})}} className="px-2 py-1 bg-[#222] text-[10px] rounded text-gray-400 hover:bg-[#333]">세례명</button>
-                  </div>
-                </div>
-                
-                <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">위치 정보 (구역/번호)</label><input name="location" value={formData.location || ''} onChange={handleChange} className="jake-input text-blue-400" /></div>
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-[#1a1a1a] rounded-xl border border-[#222]">
-                <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">생년월일</label><input name="birth_date" value={formData.birth_date || ''} onChange={handleChange} className="jake-input" placeholder="YYYY-MM-DD" /></div>
-                <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">생년(음/양)</label><select name="birth_type" value={formData.birth_type || ''} onChange={handleChange} className="jake-input"><option value="">선택</option><option value="음">음</option><option value="양">양</option></select></div>
-                <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">졸년월일</label><input name="death_date" value={formData.death_date || ''} onChange={handleChange} className="jake-input" placeholder="YYYY-MM-DD" /></div>
-                <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">졸년(음/양)</label><select name="death_type" value={formData.death_type || ''} onChange={handleChange} className="jake-input"><option value="">선택</option><option value="음">음</option><option value="양">양</option></select></div>
-              </div>
-
-              <div className="space-y-4 pt-2">
-                <div className="p-5 bg-[#0a0a0a] rounded-xl border border-[#222]">
-                  <label className="text-xs font-black text-blue-400 uppercase tracking-widest block mb-2">작업 진행 상태</label>
-                  <select name="status" value={formData.status || '접수'} onChange={handleChange} className={`jake-input text-xl text-white cursor-pointer ${getEngClass(formData.status)}`}>
-                    <option value="접수">접수</option>
-                    <option value="디자인완료">디자인완료</option>
-                    <option value="각인완료">각인완료</option>
-                    <option value="설치완료">설치완료</option>
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-gray-500 uppercase">각인 레이아웃</label>
-                  <textarea name="grave_layout" value={formData.grave_layout || ''} onChange={handleChange} className="jake-input h-28 font-mono leading-relaxed" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-gray-500 uppercase">현장 및 특이 메모</label>
-                  <textarea name="memo" value={formData.memo || ''} onChange={handleChange} className="jake-input h-16" />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-4 mt-6 pt-6 border-t border-[#222] shrink-0">
-              {!isNew && <button onClick={handleDelete} className="px-6 bg-red-900/50 py-4 rounded-xl font-black text-red-400 hover:bg-red-800 transition-colors">삭제</button>}
-              <button onClick={onClose} className="flex-1 bg-[#222] py-4 rounded-xl font-black text-white hover:bg-[#333] transition-colors">취소</button>
-              <button onClick={handleSave} disabled={isSaving} className="flex-1 bg-blue-600 py-4 rounded-xl font-black text-white hover:bg-blue-500 transition-colors">{isSaving ? '저장 중...' : (isNew ? '신규 등록' : '수정 사항 저장')}</button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // [2. 각인 관리 메인 뷰]
-    function EngravingView({ highlightItem }) {
-      const [rawList, setRawList] = useState([]);
-      const [loading, setLoading] = useState(true);
-      const [viewMode, setViewMode] = useState('list');
-      const [editingItem, setEditingItem] = useState(null);
-
-      useEffect(() => {
-        async function fetchEngravings() {
-          const { data } = await supabase.from('engravings').select('*');
-          if (data) setRawList(data);
-          setLoading(false);
-        }
-        fetchEngravings();
-      }, []);
-
-      useEffect(() => { if (highlightItem) setEditingItem(highlightItem); }, [highlightItem]);
-
-      // 🚨 절대 정렬 알고리즘 (오선하 증발 및 과거 데이터 우선 문제 완벽 해결)
-      const sortedFolders = useMemo(() => {
-        const valid = rawList.filter(i => i.deceased_name && String(i.deceased_name).trim() !== '' && i.deceased_name !== '.');
-
-        const groupsObj = valid.reduce((acc, i) => {
-          const cNo = (i.contract_no && String(i.contract_no).trim() !== '') ? String(i.contract_no).trim() : `개별접수-${i.id.substring(0,4)}`;
-          if (!acc[cNo]) acc[cNo] = [];
-          acc[cNo].push(i);
-          return acc;
-        }, {});
-
-        const folderArray = Object.entries(groupsObj).map(([cNo, items]) => {
-          items.sort((a, b) => {
-            const pA = getEngPriority(a.status);
-            const pB = getEngPriority(b.status);
-            if (pA !== pB) return pA - pB;
-            // 🚨 오름차순 연산 변경: 미래 날짜가 상단(음수). 빈 날짜는 0이므로 하단으로 밀림.
-            return getSafeTime(b.scheduled_date) - getSafeTime(a.scheduled_date); 
-          });
-          return { cNo, items };
-        });
-
-        folderArray.sort((folderA, folderB) => {
-          const pA = Math.min(...folderA.items.map(i => getEngPriority(i.status)));
-          const pB = Math.min(...folderB.items.map(i => getEngPriority(i.status)));
-          if (pA !== pB) return pA - pB; 
-          // 폴더 대표 날짜도 Math.max로 가장 미래 날짜를 찾아 그것을 기준으로 상단 배치
-          const dateA = Math.max(...folderA.items.filter(i => getEngPriority(i.status) === pA).map(i => getSafeTime(i.scheduled_date)));
-          const dateB = Math.max(...folderB.items.filter(i => getEngPriority(i.status) === pB).map(i => getSafeTime(i.scheduled_date)));
-          return dateB - dateA;
-        });
-
-        return folderArray;
-      }, [rawList]);
-
-      if (loading) return <div className="p-10 text-center animate-pulse font-black text-blue-500 text-xl tracking-widest">데이터 동기화 중...</div>;
-
-      return (
-        <div className="h-full flex flex-col relative">
-          <div className="flex justify-between items-center mb-6">
-            <button onClick={() => setEditingItem({})} className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black shadow-lg hover:bg-blue-500 transition-colors">
-              <i className="ph ph-plus-circle mr-1"></i> 신규 각인 등록
-            </button>
-            <div className="flex bg-[#111] p-1.5 rounded-xl border border-[#222]">
-              <button onClick={() => setViewMode('list')} className={`px-5 py-2 rounded-lg text-sm font-black transition-all ${viewMode === 'list' ? 'bg-[#333] text-white' : 'text-gray-500 hover:text-white'}`}>리스트 뷰</button>
-              <button onClick={() => setViewMode('calendar')} className={`px-5 py-2 rounded-lg text-sm font-black transition-all ${viewMode === 'calendar' ? 'bg-[#333] text-white' : 'text-gray-500 hover:text-white'}`}>각인 달력</button>
-            </div>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto pr-2 pb-40 custom-scrollbar">
-            {viewMode === 'list' ? (
-              <div className="space-y-4">
-                {sortedFolders.map(folderInfo => {
-                  const contractor = folderInfo.items[0].contractor || '미상';
-                  const deceasedNames = folderInfo.items.map(i => i.deceased_name).join(', ');
-                  const folderTitle = folderInfo.cNo.startsWith('개별') ? '개별 건' : folderInfo.cNo;
-
-                  const counts = { '접수': 0, '디자인완료': 0, '각인완료': 0, '설치완료': 0 };
-                  folderInfo.items.forEach(i => {
-                    const p = getEngPriority(i.status);
-                    if(p===0) counts['접수']++;
-                    if(p===1) counts['디자인완료']++;
-                    if(p===2) counts['각인완료']++;
-                    if(p===3) counts['설치완료']++;
-                  });
-
-                  return (
-                    <details key={folderInfo.cNo} className="bg-[#111] rounded-xl overflow-hidden border border-[#222] shadow-lg group">
-                      <summary className="bg-[#1a1a1a] hover:bg-[#222] px-5 py-4 flex justify-between items-center transition-colors">
-                        <div className="flex items-center gap-3">
-                          <i className="ph ph-folder text-blue-500 text-xl group-open:text-blue-400"></i>
-                          <h3 className="text-sm font-black text-white">
-                            {folderTitle} <span className="text-blue-400 font-bold ml-1">({contractor})</span>
-                            <span className="text-gray-500 font-medium ml-2 hidden md:inline-block">- {deceasedNames}</span>
-                          </h3>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {counts['접수'] > 0 && <span className="text-[10px] eng-접수 px-2 py-0.5 rounded">접수 {counts['접수']}</span>}
-                          {counts['디자인완료'] > 0 && <span className="text-[10px] eng-디자인완료 px-2 py-0.5 rounded">디자인 {counts['디자인완료']}</span>}
-                          {counts['각인완료'] > 0 && <span className="text-[10px] eng-각인완료 px-2 py-0.5 rounded">각인 {counts['각인완료']}</span>}
-                          <i className="ph ph-caret-down text-gray-500 text-lg group-open:rotate-180 transition-transform ml-2"></i>
-                        </div>
-                      </summary>
-                      
-                      <div className="flex flex-col divide-y divide-[#222] border-t border-[#333]">
-                        {folderInfo.items.map(i => {
-                          const statusName = getEngPriority(i.status) === 0 ? '접수' : getEngPriority(i.status) === 1 ? '디자인완료' : getEngPriority(i.status) === 2 ? '각인완료' : '설치완료';
-                          return (
-                            <div key={i.id} onClick={() => setEditingItem(i)} className="flex flex-col md:flex-row justify-between items-start md:items-center px-6 py-3 bg-[#0a0a0a] hover:bg-[#151515] transition-colors cursor-pointer gap-2 md:gap-0">
-                              <div className="flex items-center gap-6 flex-1 min-w-0">
-                                <div className="w-28 text-[11px] text-blue-500 font-black uppercase tracking-widest truncate">{String(i.location || '-')}</div>
-                                <div className="w-24 text-base font-black text-gray-100 truncate">{String(i.deceased_name || '-')}</div>
-                                <div className="hidden lg:flex text-[11px] text-gray-500 font-bold gap-2 bg-[#1a1a1a] px-2 py-1 rounded">
-                                  <span>{String(i.size_spec || '규격-')}</span> | <span>{String(i.religion || '종교-')}</span>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-6 shrink-0 w-full md:w-auto justify-between md:justify-end">
-                                <div className="text-[11px] text-gray-400 font-mono font-bold tracking-widest">{i.scheduled_date || '일정미정'}</div>
-                                <div className={`text-[11px] w-24 text-center py-1.5 rounded-md font-black ${getEngClass(i.status)}`}>
-                                  {statusName}
-                                </div>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </details>
-                  )
-                })}
-              </div>
-            ) : (
-              <EngravingCalendar rawList={rawList} onSelect={(item) => setEditingItem(item)} />
-            )}
-          </div>
-
-          {editingItem && <EngravingEditorModal item={editingItem} onClose={() => setEditingItem(null)} />}
-        </div>
-      );
-    }
-
-    // [각인 전용 달력 컴포넌트]
-    function EngravingCalendar({ rawList, onSelect }) {
-      const [currentDate, setCurrentDate] = useState(new Date());
-      const days = [];
-      const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
-      const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
-      
-      for (let i = 0; i < firstDay; i++) days.push(<div key={`e-${i}`} className="calendar-day opacity-5"></div>);
-      for (let d = 1; d <= daysInMonth; d++) {
-        const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-        const dayItems = rawList.filter(i => i.scheduled_date === dateStr);
-        days.push(
-          <div key={d} className={`calendar-day border border-[#333] ${new Date().toISOString().startsWith(dateStr) ? 'today' : ''}`}>
-            <div className="text-xs font-bold text-gray-500 mb-1">{d}</div>
-            <div className="flex flex-col gap-1 overflow-y-auto h-full pr-1 custom-scrollbar">
-              {dayItems.map(i => {
-                const statusName = getEngPriority(i.status) === 0 ? '접수' : getEngPriority(i.status) === 1 ? '디자인' : getEngPriority(i.status) === 2 ? '각인' : '설치';
-                return (
-                  <div key={i.id} onClick={(e) => { e.stopPropagation(); onSelect(i); }} className={`eng-badge ${getEngClass(i.status)}`}>
-                    {i.deceased_name} <span className="opacity-70 font-normal ml-1">({statusName})</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      }
-      return (
-        <div className="h-full flex flex-col bg-[#111] rounded-2xl overflow-hidden border border-[#222]">
-          <div className="p-5 flex justify-between items-center bg-[#1a1a1a]">
-            <h2 className="text-2xl font-black text-white">{currentDate.getFullYear()}년 {currentDate.getMonth() + 1}월</h2>
-            <div className="flex gap-2">
-              <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth()-1)))} className="p-2 bg-[#222] rounded hover:bg-[#333] text-white"><i className="ph ph-caret-left text-xl"></i></button>
-              <button onClick={() => setCurrentDate(new Date())} className="px-5 py-2 bg-[#222] rounded hover:bg-[#333] text-sm font-bold text-white">이번 달</button>
-              <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth()+1)))} className="p-2 bg-[#222] rounded hover:bg-[#333] text-white"><i className="ph ph-caret-right text-xl"></i></button>
-            </div>
-          </div>
-          <div className="grid grid-cols-7 text-center text-[10px] py-2 bg-[#000] text-gray-600 font-bold border-b border-[#222] tracking-widest">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=> <div key={d}>{d}</div>)}</div>
-          <div className="calendar-grid flex-1 overflow-y-auto">{days}</div>
-        </div>
-      );
-    }
-
-    // 🗔 [통합 일정 신규 등록 모달]
-    function ScheduleEditorModal({ onClose }) {
-      const [type, setType] = useState('안치');
-      const [formData, setFormData] = useState({ date: new Date().toISOString().split('T')[0] });
-      const [isSaving, setIsSaving] = useState(false);
-
-      const handleSave = async () => {
-        setIsSaving(true);
-        try {
-          if (type === '안치') {
-            if (!formData.name) return alert("고인명을 입력해주세요.");
-            await supabase.from('interments').insert([{ 
-              id: crypto.randomUUID(), deceased_name: formData.name, contractor: formData.contractor, scheduled_date: formData.date, location_id: formData.location, memo: formData.memo 
-            }]);
-          } else {
-            if (!formData.name) return alert("고객명을 입력해주세요.");
-            await supabase.from('sales_pipeline').insert([{ 
-              id: crypto.randomUUID(), customer_name: formData.name, agency_corp: formData.contractor, visit_date: formData.date, memo: formData.memo 
-            }]);
-          }
-          window.location.reload();
-        } catch(e) { console.error(e); setIsSaving(false); }
-      };
-
-      return (
-        <div className="fixed inset-0 bg-black/90 z-[9999] flex items-center justify-center p-4" onClick={onClose}>
-          <div className="bg-[#111] border border-[#333] rounded-[2rem] w-full max-w-lg p-8 shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6 border-b border-[#222] pb-4">
-              <h3 className="text-2xl font-black text-white">✨ 신규 일정 등록</h3>
-              <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors"><i className="ph ph-x text-3xl" /></button>
-            </div>
-            
-            <div className="space-y-4">
-              <div className="flex gap-2">
-                <button onClick={() => setType('안치')} className={`flex-1 py-3 rounded-xl font-black transition-colors ${type === '안치' ? 'bg-green-700 text-white' : 'bg-[#222] text-gray-500'}`}>🟢 안치 일정</button>
-                <button onClick={() => setType('답사')} className={`flex-1 py-3 rounded-xl font-black transition-colors ${type === '답사' ? 'bg-yellow-600 text-black' : 'bg-[#222] text-gray-500'}`}>🟡 영업/답사</button>
-              </div>
-              <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">예정일</label><input type="date" value={formData.date || ''} onChange={e=>setFormData({...formData, date: e.target.value})} className="jake-input" /></div>
-              <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">{type === '안치' ? '고인명' : '고객명'}</label><input value={formData.name || ''} onChange={e=>setFormData({...formData, name: e.target.value})} className="jake-input" /></div>
-              <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">{type === '안치' ? '계약자' : '영업사/담당자'}</label><input value={formData.contractor || ''} onChange={e=>setFormData({...formData, contractor: e.target.value})} className="jake-input" /></div>
-              {type === '안치' && <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">위치</label><input value={formData.location || ''} onChange={e=>setFormData({...formData, location: e.target.value})} className="jake-input" /></div>}
-              <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">세부 메모</label><textarea value={formData.memo || ''} onChange={e=>setFormData({...formData, memo: e.target.value})} className="jake-input h-24" /></div>
-            </div>
-            <button onClick={handleSave} disabled={isSaving} className="w-full mt-8 bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-black text-white transition-colors">{isSaving ? '저장 중...' : '일정 저장'}</button>
-          </div>
-        </div>
-      );
-    }
-
-    // [3. 통합 일정 (각인 제외 및 중앙정렬 대시보드)]
-    function CalendarView() {
-      const [events, setEvents] = useState([]);
-      const [dashCounts, setDashCounts] = useState({ inter: 0, visit: 0, leave: 0 });
-      const [loading, setLoading] = useState(true);
-      const [currentDate, setCurrentDate] = useState(new Date());
-      const [selectedDate, setSelectedDate] = useState(null);
-      const [isModalOpen, setIsModalOpen] = useState(false);
-      const [isEditorOpen, setIsEditorOpen] = useState(false);
-
-      useEffect(() => {
-        async function fetchAll() {
-          try {
-            // 통합일정 달력에는 안치/답사만 (각인은 제외)
-            const { data: inter } = await supabase.from('interments').select('*');
-            const { data: pipe } = await supabase.from('sales_pipeline').select('*');
-            const { data: att } = await supabase.from('attendance').select('*');
-            
-            let merged = [];
-            if (inter) merged = [...merged, ...inter.filter(i=>i.scheduled_date).map(i => ({ id: i.id, date: i.scheduled_date, title: `${i.deceased_name}(안치)`, type: '안치', memo: i.memo }))];
-            if (pipe) merged = [...merged, ...pipe.filter(p=>p.visit_date).map(p => ({ id: p.id, date: p.visit_date, title: `${p.customer_name}(답사)`, type: '답사', memo: p.memo }))];
-            
-            setEvents(merged);
-
-            const todayStr = new Date().toISOString().split('T')[0];
-            const tInter = inter ? inter.filter(i => i.scheduled_date === todayStr).length : 0;
-            const tVisit = pipe ? pipe.filter(p => p.visit_date === todayStr).length : 0;
-            const tLeave = att ? att.filter(a => a.work_date === todayStr && a.status === '휴무').length : 0;
-            setDashCounts({ inter: tInter, visit: tVisit, leave: tLeave });
-          } catch (error) {}
-          setLoading(false);
-        }
-        fetchAll();
-      }, []);
-
-      if (loading) return <div className="p-10 text-center font-black text-blue-500 text-xl tracking-widest mt-20 animate-pulse">Loading Calendar...</div>;
-
-      const days = [];
-      const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
-      const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
-      
-      for (let i = 0; i < firstDay; i++) days.push(<div key={`e-${i}`} className="calendar-day opacity-5"></div>);
-      for (let d = 1; d <= daysInMonth; d++) {
-        const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-        const dayEvents = events.filter(e => e.date === dateStr);
-        days.push(
-          <div key={d} className={`calendar-day border border-gray-800/30 ${dateStr === new Date().toISOString().split('T')[0] ? 'today' : ''}`} onClick={() => { setSelectedDate(dateStr); setIsModalOpen(true); }}>
-            <div className="text-xs font-bold text-gray-500 mb-1">{d}</div>
-            <div className="space-y-1 h-full overflow-y-auto pr-1 custom-scrollbar">
-              {dayEvents.map((e, idx) => (
-                <div key={idx} className={`text-[10px] px-1.5 py-1 rounded truncate border font-bold ${e.type === '안치' ? 'bg-green-900/40 text-green-300 border-green-800' : 'bg-yellow-900/40 text-yellow-300 border-yellow-800'}`}>
-                  {e.type[0]} {e.title}
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      }
-
-      const selectedDayEvents = events.filter(e => e.date === selectedDate);
-
-      return (
-        <div className="h-full flex flex-col gap-4">
-          <div className="flex justify-end mb-2">
-            <button onClick={() => setIsEditorOpen(true)} className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black shadow-lg hover:bg-blue-500 transition-colors">
-              <i className="ph ph-plus-circle mr-1"></i> 신규 일정 등록
-            </button>
-          </div>
-
-          {/* 🚨 대시보드 3등분 쫙 펴지게 수정 */}
-          <details open className="bg-[#111] rounded-2xl border border-[#222] group shadow-lg">
-            <summary className="p-4 font-black text-white flex justify-between items-center outline-none cursor-pointer hover:bg-[#1a1a1a] transition-colors rounded-2xl">
-              <div className="flex items-center gap-3">
-                <i className="ph ph-chart-pie-slice text-blue-500 text-xl"></i>
-                <span className="tracking-widest">TODAY'S DASHBOARD</span>
-              </div>
-              <i className="ph ph-caret-down text-gray-500 group-open:rotate-180 transition-transform"></i>
-            </summary>
-            <div className="flex justify-evenly items-center p-6 border-t border-[#333] bg-[#0a0a0a] rounded-b-2xl">
-              <div className="flex flex-col items-center flex-1">
-                <span className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">오늘 안치</span>
-                <span className="text-3xl font-black text-green-400">{dashCounts.inter}건</span>
-              </div>
-              <div className="w-px h-12 bg-[#333]"></div>
-              <div className="flex flex-col items-center flex-1">
-                <span className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">오늘 답사</span>
-                <span className="text-3xl font-black text-yellow-400">{dashCounts.visit}건</span>
-              </div>
-              <div className="w-px h-12 bg-[#333]"></div>
-              <div className="flex flex-col items-center flex-1">
-                <span className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">오늘 휴무</span>
-                <span className="text-3xl font-black text-red-400">{dashCounts.leave}명</span>
-              </div>
-            </div>
-          </details>
-
-          <div className="h-full glass-panel rounded-3xl overflow-hidden flex flex-col border border-[#222]">
-            <div className="p-6 flex justify-between items-center bg-[#1a1a1a]">
-              <h2 className="text-2xl font-black text-white">{currentDate.getFullYear()}년 {currentDate.getMonth() + 1}월 통합 일정</h2>
-              <div className="flex gap-4">
-                <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth()-1)))} className="p-3 bg-[#222] rounded-xl hover:bg-[#333] text-white"><i className="ph ph-caret-left text-xl"></i></button>
-                <button onClick={() => setCurrentDate(new Date())} className="px-5 py-2 bg-[#222] rounded-xl hover:bg-[#333] text-sm font-bold text-white">오늘</button>
-                <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth()+1)))} className="p-3 bg-[#222] rounded-xl hover:bg-[#333] text-white"><i className="ph ph-caret-right text-xl"></i></button>
-              </div>
-            </div>
-            <div className="grid grid-cols-7 text-center text-[11px] py-3 bg-[#000] text-gray-600 font-bold border-b border-[#222] tracking-widest">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=> <div key={d}>{d}</div>)}</div>
-            <div className="calendar-grid flex-1 overflow-y-auto">{days}</div>
-
-            {/* 통합일정 팝업 - 세부사항 아코디언 적용 */}
-            {isModalOpen && (
-              <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" onClick={() => setIsModalOpen(false)}>
-                <div className="bg-[#1a1a1a] border border-[#333] rounded-[2.5rem] w-full max-w-md p-10 shadow-2xl" onClick={e => e.stopPropagation()}>
-                  <div className="flex justify-between items-start mb-8 border-b border-[#333] pb-4">
-                    <div><h3 className="text-2xl font-black text-white">{selectedDate?.split('-')[2]}일 일정</h3><p className="text-sm text-blue-500 font-mono font-bold mt-2">{selectedDate}</p></div>
-                    <button onClick={() => setIsModalOpen(false)}><i className="ph ph-x text-3xl text-gray-500 hover:text-white" /></button>
-                  </div>
-                  <div className="space-y-4 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
-                    {selectedDayEvents.length === 0 ? <p className="text-gray-600 text-center py-10 font-bold bg-[#111] rounded-2xl">등록된 일정이 없습니다.</p> : 
-                      selectedDayEvents.map((e, i) => (
-                        <details key={i} className={`group p-5 rounded-2xl border bg-[#0a0a0a] ${e.type === '안치' ? 'border-green-800/50' : 'border-yellow-800/50'} cursor-pointer`}>
-                          <summary className="font-black text-white flex justify-between items-center outline-none">
-                            <div className="flex items-center gap-3">
-                              <span className={`text-[10px] font-black px-2 py-1 rounded-md ${e.type === '안치' ? 'bg-green-700 text-white' : 'bg-yellow-600 text-black'}`}>{e.type}</span>
-                              <span className="text-base tracking-tight truncate">{e.title}</span>
-                            </div>
-                            <i className="ph ph-caret-down text-gray-500 group-open:rotate-180 transition-transform"></i>
-                          </summary>
-                          <div className="text-sm text-gray-400 mt-4 p-4 bg-[#111] rounded-xl whitespace-pre-wrap border border-[#222]">
-                            {e.memo || '기록된 세부사항 메모가 없습니다.'}
-                          </div>
-                        </details>
-                      ))
-                    }
-                  </div>
-                  <button onClick={() => setIsModalOpen(false)} className="w-full mt-8 bg-blue-600 hover:bg-blue-500 py-5 rounded-2xl font-black text-white transition-all shadow-xl active:scale-95">닫기</button>
-                </div>
-              </div>
-            )}
-
-            {isEditorOpen && <ScheduleEditorModal onClose={() => setIsEditorOpen(false)} />}
-          </div>
-        </div>
-      );
-    }
-
-    // [4. 현장 마스터 - 정보 팝업 (계약번호 크로스 연동)]
-    function FieldMaster({ highlightId }) {
-      const [locations, setLocations] = useState([]); const [sections, setSections] = useState([]); const [activeSection, setActiveSection] = useState(''); const [loading, setLoading] = useState(true);
-      const [isModalOpen, setIsModalOpen] = useState(false); const [selectedSlot, setSelectedSlot] = useState(null);
-      const [linkedContractNo, setLinkedContractNo] = useState(''); // 🚨 interments에서 가져온 계약번호
-      
-      const rowConfig = { 'A2/가':[12], 'A3/가':[8,8], 'A4/가':[12,12,12,12,18,18,28,12], 'A4/나':[9,11,7,8,8], 'A4/다':[6,6], 'A5/가':[13,14,14,13,13,15,11], 'A5/나':[23,22,26,25,30,47,47,30,39], 'A6/가':[27,27,22,18,19,15,13], 'A6/나':[25,26,26,26,26,26], 'C1/가':[13,17,21,25], 'B1/가':[20,23], 'B2/가':[34,34,35,34,34], 'B3/가':[48,46,45,41], 'B4/가':[37,38,41,41,34], 'B5/가':[47,47,49,48,40,32], 'B6/가/1-12':[47,52,53,52,53,53,54,54,54,53,55,54,50], 'B6/가/13-14':[75,75,75,75,75,75,75,75,75] };
-
-      useEffect(() => {
-        async function fetchLoc() {
-          try {
-            let all = []; let from = 0; while (true) {
-              const { data, error } = await supabase.from('master_locations').select('*').range(from, from + 999);
-              if (!data || data.length === 0) break; all = [...all, ...data]; from += 1000;
-            }
-            if (all.length > 0) {
-              setLocations(all); const sects = [...new Set(all.map(i => i.section).filter(Boolean))].sort((a,b) => a.localeCompare(b, undefined, {numeric:true}));
-              setSections(sects); if (sects.length > 0) setActiveSection(sects[0]);
-            } 
-          } catch(e) {}
-          setLoading(false);
-        } fetchLoc();
-      }, []);
-
-      useEffect(() => {
-        if (highlightId) {
-          const item = locations.find(l => l.id === highlightId);
-          if (item) { 
-            setActiveSection(item.section); 
-            setSelectedSlot(item); 
-            fetchLinkedContract(item.id);
-            setIsModalOpen(true); 
-          }
-        }
-      }, [highlightId, locations]);
-
-      // 🚨 interments 테이블에서 계약번호 긁어오기
-      const fetchLinkedContract = async (locationId) => {
-        setLinkedContractNo('로딩 중...');
-        try {
-          const { data } = await supabase.from('interments').select('contract_no').eq('location_id', locationId).limit(1);
-          if (data && data.length > 0 && data[0].contract_no) setLinkedContractNo(data[0].contract_no);
-          else setLinkedContractNo('안치 데이터 없음');
-        } catch(e) { setLinkedContractNo('연동 오류'); }
-      };
-
-      if (loading) return <div className="p-10 text-center animate-pulse font-black tracking-widest text-blue-500 uppercase">Syncing Map Data...</div>;
-
-      const currentData = locations.filter(l => l.section === activeSection);
-      const layout = rowConfig[activeSection] || [20]; 
-      let curIdx = 0; const rows = [];
-
-      layout.forEach((count, rIdx) => {
-        if (curIdx >= currentData.length) return;
-        const rowData = currentData.slice(curIdx, curIdx + count);
-        rows.push(
-          <div key={rIdx} className="row-container">
-            {rowData.map(i => i.id.includes('SPACER') ? <div key={i.id} className="slot-spacer" /> : (
-              <div key={i.id} className={`slot status-${i.status || '미분양'} ${highlightId === i.id ? 'ring-4 ring-blue-500 scale-110 z-[50] shadow-2xl shadow-blue-500/50' : ''}`} onClick={() => { 
-                setSelectedSlot(i); 
-                fetchLinkedContract(i.id);
-                setIsModalOpen(true); 
-              }}>
-                <div className="font-mono text-[10px] opacity-70 font-bold mb-1">{i.slot_no}</div>
-                <div className="truncate w-full px-1 font-black text-[12px]">{i.deceased_name || ''}</div>
-              </div>
-            ))}
-          </div>
-        );
-        curIdx += count;
-      });
-
-      const handlePopupChange = (e) => {
-        const { name, value } = e.target;
-        setSelectedSlot(prev => ({ ...prev, [name]: value }));
-      };
-      
-      const handlePopupSave = async () => {
-        // master_locations 테이블에는 계약번호 컬럼이 없으므로 payload에서 제외
-        const { id, section, slot_no, deceased_name, contractor, price, status, units, maintenance_fee, memo } = selectedSlot;
-        const payload = { deceased_name, contractor, price, status, units, maintenance_fee, memo };
-        
-        await supabase.from('master_locations').update(payload).eq('id', id);
-        setLocations(prev => prev.map(l => l.id === id ? selectedSlot : l));
-        setIsModalOpen(false);
-      };
-
-      return (
-        <div className="flex flex-col h-full glass-panel rounded-3xl overflow-hidden border border-[#222]">
-          <div className="flex overflow-x-auto bg-[#161616] p-4 gap-2 border-b border-[#2a2a2a] shrink-0 custom-scrollbar">
-            {sections.map(s => <button key={s} onClick={() => setActiveSection(s)} className={`px-4 py-2 rounded-xl text-xs font-black whitespace-nowrap transition-colors ${activeSection === s ? 'bg-blue-600 text-white' : 'bg-[#222] text-gray-500 hover:text-white'}`}>{s}</button>)}
-          </div>
-          <div className="flex-1 overflow-auto p-8 bg-[#000] custom-scrollbar"><div className="w-max pb-32">{rows}</div></div>
-          
-          {/* 🚨 현장 마스터 전용 모달 (계약번호 연동 및 속성 복구) */}
-          {isModalOpen && selectedSlot && (
-            <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" onClick={() => setIsModalOpen(false)}>
-              <div className="bg-[#1a1a1a] border border-[#333] rounded-[2.5rem] w-full max-w-2xl p-10 shadow-2xl" onClick={e => e.stopPropagation()}>
-                <div className="flex justify-between items-start mb-6 border-b border-[#333] pb-4">
-                  <div>
-                    <h3 className="text-3xl font-black text-white">{selectedSlot.section} {selectedSlot.slot_no}</h3>
-                    <p className="text-sm text-blue-500 font-bold mt-2">현장 마스터 정보 관리</p>
-                  </div>
-                  <button onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-white transition-colors"><i className="ph ph-x text-3xl" /></button>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto max-h-[60vh] pr-2 custom-scrollbar">
-                  <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">분양 상태</label>
-                    <select name="status" value={selectedSlot.status || '미분양'} onChange={handlePopupChange} className="jake-input cursor-pointer">
-                      <option value="미분양">미분양</option><option value="예약">예약</option><option value="계약금">계약금</option><option value="홀딩">홀딩</option><option value="안치">안치</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">고인명</label><input name="deceased_name" value={selectedSlot.deceased_name || ''} onChange={handlePopupChange} className="jake-input text-white" /></div>
-                  
-                  {/* 🚨 계약번호는 interments 테이블에서 가져온 읽기 전용 정보 */}
-                  <div className="space-y-1"><label className="text-[10px] font-black text-blue-500 uppercase">계약번호 (안치 데이터 연동)</label><input value={linkedContractNo} readOnly className="jake-input text-gray-400 bg-[#000] border-[#222]" /></div>
-                  <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">계약자명</label><input name="contractor" value={selectedSlot.contractor || ''} onChange={handlePopupChange} className="jake-input" /></div>
-                  
-                  <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">기수 (Units)</label><input name="units" type="number" value={selectedSlot.units || ''} onChange={handlePopupChange} className="jake-input" /></div>
-                  <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase">분양가 (Price)</label><input name="price" type="number" value={selectedSlot.price || ''} onChange={handlePopupChange} className="jake-input" /></div>
-                  
-                  <div className="space-y-1 col-span-1 md:col-span-2"><label className="text-[10px] font-black text-gray-500 uppercase">관리비 (Maintenance Fee)</label><input name="maintenance_fee" type="number" value={selectedSlot.maintenance_fee || ''} onChange={handlePopupChange} className="jake-input" /></div>
-                  
-                  <div className="space-y-1 col-span-1 md:col-span-2"><label className="text-[10px] font-black text-gray-500 uppercase">특이사항 메모</label>
-                    <textarea name="memo" value={selectedSlot.memo || ''} onChange={handlePopupChange} className="jake-input h-20" />
-                  </div>
-                </div>
-                <button onClick={handlePopupSave} className="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl font-black text-white mt-8 transition-colors shadow-xl">정보 저장하기</button>
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    // [5. 업무 통합 보드 (WorkOS 프로젝트 껍데기만. 추후 연동)]
-    function KanbanBoard() {
-      return (
-        <div className="flex flex-col items-center justify-center h-full text-gray-500 border-2 border-dashed border-[#333] rounded-3xl">
-          <i className="ph ph-kanban text-6xl mb-4 text-[#444]"></i>
-          <p className="font-bold text-lg text-gray-400">WorkOS 통합 모듈 준비 중</p>
-          <p className="text-xs text-gray-600 mt-2">업체 연락처, 회의록, 업무 칸반보드</p>
-        </div>
-      );
-    }
-
-    // [6. 메인 앱 라우터]
-    function App() {
-      const [currentTab, setCurrentTab] = useState('engraving'); 
-      const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
-      const [highlightId, setHighlightId] = useState(null); 
-      const [highlightEngraving, setHighlightEngraving] = useState(null); 
-
-      const navItems = [{ id: 'field', icon: 'ph-map-trifold', label: '현장 마스터' }, { id: 'calendar', icon: 'ph-calendar-check', label: '통합 일정' }, { id: 'engraving', icon: 'ph-hammer', label: '각인 관리' }, { id: 'project', icon: 'ph-kanban', label: 'Work 프로젝트' }];
-      
-      const handleSearchResult = (res) => {
-        if (currentTab === 'engraving' || currentTab === 'contact') {
-          setHighlightEngraving(res); 
-        } else {
-          setCurrentTab('field'); 
-          setHighlightId(res.id); 
-          setTimeout(() => setHighlightId(null), 3000);
-        }
-      };
-
-      return (
-        <div className="flex h-screen bg-[#050505] overflow-hidden text-gray-400 font-sans selection:bg-blue-500/30">
-          <aside className={`fixed md:static inset-y-0 left-0 z-[1500] w-72 bg-[#0a0a0a] border-r border-[#1a1a1a] transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 flex flex-col shadow-2xl`}>
-            <div className="p-10 border-b border-[#1a1a1a] flex justify-between items-center"><h1 className="text-3xl font-black text-white tracking-tighter uppercase">Jake<span className="text-blue-500">OS</span></h1></div>
-            <nav className="flex-1 p-6 space-y-3 overflow-y-auto custom-scrollbar">
-              <div className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-6 ml-3">System Modules</div>
-              {navItems.map(item => (<button key={item.id} onClick={() => { setCurrentTab(item.id); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-4 px-6 py-5 rounded-3xl text-sm font-black transition-all ${currentTab === item.id ? 'bg-blue-600 text-white shadow-[0_10px_30px_rgba(37,99,235,0.3)]' : 'text-gray-500 hover:bg-[#111]'}`}><i className={`ph ${item.icon} text-2xl`}></i> {item.label}</button>))}
+            <nav className="p-4 space-y-2">
+              <button className="w-full text-left p-3 rounded-lg bg-blue-600 text-white font-bold shadow-md">
+                📊 통합 대시보드
+              </button>
+              <button className="w-full text-left p-3 rounded-lg text-gray-600 hover:bg-gray-100 font-semibold transition">
+                🔍 현장 관리 (Grid)
+              </button>
+              <button className="w-full text-left p-3 rounded-lg text-gray-600 hover:bg-gray-100 font-semibold transition">
+                ⚰️ 각인 관리
+              </button>
+              <button className="w-full text-left p-3 rounded-lg text-gray-600 hover:bg-gray-100 font-semibold transition">
+                🚀 프로젝트 (WorkOS)
+              </button>
             </nav>
           </aside>
-          <main className="flex-1 flex flex-col min-w-0 overflow-visible relative">
-            <header className="flex items-center justify-between p-6 bg-[#0a0a0a] border-b border-[#1a1a1a] gap-6 z-[1600] overflow-visible">
-              <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-3 text-gray-500"><i className="ph ph-list text-3xl" /></button>
-              <GlobalSearch onSelectResult={handleSearchResult} currentTab={currentTab} />
-              <div className="hidden md:flex items-center gap-4"><div className="text-right leading-none"><div className="text-[10px] font-black text-white uppercase mb-1.5 tracking-widest">Master Admin</div><div className="text-[9px] text-green-500 font-bold uppercase tracking-widest">System Active</div></div><div className="h-12 w-12 rounded-[1.25rem] bg-[#111] border border-[#222] flex items-center justify-center font-black text-blue-500 text-xl shadow-inner">J</div></div>
+
+          {/* 메인 컨텐츠 영역 */}
+          <main className="flex-1 flex flex-col h-screen overflow-hidden relative bg-slate-50">
+            {/* 상단 헤더 */}
+            <header className="h-14 bg-white border-b border-gray-200 flex items-center px-4 justify-between shrink-0 shadow-sm z-10">
+              <div className="flex items-center">
+                <button 
+                  className="md:hidden p-2 text-gray-600 rounded-md bg-gray-100 mr-3"
+                  onClick={() => setIsSidebarOpen(true)}
+                >
+                  ☰
+                </button>
+                <div className="font-bold text-lg text-slate-700">대시보드 & 일정 통합</div>
+              </div>
+              <div className="flex space-x-2">
+                <input type="text" placeholder="통합 검색..." className="px-4 py-1.5 border border-gray-300 rounded-full text-sm outline-none focus:border-blue-500 hidden sm:block bg-gray-50"/>
+              </div>
             </header>
-            <div className="flex-1 p-6 md:p-10 overflow-hidden relative">
-              {currentTab === 'field' && <FieldMaster highlightId={highlightId} />}
-              {currentTab === 'calendar' && <CalendarView />}
-              {currentTab === 'engraving' && <EngravingView highlightItem={highlightEngraving} />}
-              {currentTab === 'project' && <KanbanBoard />}
+
+            {/* 실제 내용이 그려지는 뷰 포트 */}
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-24">
+              {children}
             </div>
           </main>
         </div>
       );
     }
-    const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<App />);
+
+    // ==========================================
+    // 🧩 컴포넌트 2: Dashboard (데이터 뷰어)
+    // ==========================================
+    function Dashboard() {
+      const [loading, setLoading] = useState(true);
+      const [dataList, setDataList] = useState([]);
+
+      useEffect(() => {
+        if (SUPABASE_URL.includes('여기에')) {
+          setLoading(false);
+          return; // 키가 입력되지 않으면 중단
+        }
+        fetchData();
+      }, []);
+
+      const fetchData = async () => {
+        try {
+          // view_master_dashboard 에서 무지연(Zero-Lag)으로 데이터 호출
+          const { data, error } = await supabaseClient
+            .from('view_master_dashboard')
+            .select('*')
+            .order('실제_안치일정', { ascending: false, nullsFirst: false })
+            .limit(100);
+
+          if (error) throw error;
+          setDataList(data || []);
+        } catch (error) {
+          console.error("데이터 로드 에러:", error.message);
+          alert("데이터를 불러오지 못했습니다. DB 연결을 확인하세요.");
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      return (
+        <Layout>
+          {/* 요약 상황판 */}
+          <div className="flex bg-slate-800 text-white rounded-xl shadow-lg mb-6 transform transition hover:scale-[0.99] cursor-default">
+            <div className="flex-1 p-4 text-center border-r border-slate-600">
+              <div className="text-xs text-slate-400 font-bold mb-1">오늘 안치</div>
+              <div className="text-2xl font-black text-yellow-400">0건</div>
+            </div>
+            <div className="flex-1 p-4 text-center border-r border-slate-600">
+              <div className="text-xs text-slate-400 font-bold mb-1">오늘 답사</div>
+              <div className="text-2xl font-black text-yellow-400">0건</div>
+            </div>
+            <div className="flex-1 p-4 text-center">
+              <div className="text-xs text-slate-400 font-bold mb-1">오늘 휴무</div>
+              <div className="text-2xl font-black text-white">0명</div>
+            </div>
+          </div>
+
+          {/* 퀵 액션 버튼 */}
+          <div className="flex gap-2 mb-6">
+            <button className="flex-1 py-3 bg-white text-orange-600 border-2 border-orange-500 rounded-lg font-bold text-sm shadow-sm hover:bg-orange-50 active:bg-orange-100 transition">
+              ➕ 영업/답사 등록
+            </button>
+            <button className="flex-1 py-3 bg-white text-green-700 border-2 border-green-700 rounded-lg font-bold text-sm shadow-sm hover:bg-green-50 active:bg-green-100 transition">
+              ➕ 안치 일정 등록
+            </button>
+          </div>
+
+          {/* 마스터 데이터 테이블 */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 overflow-hidden">
+            <h2 className="font-bold text-lg mb-4 text-slate-800 border-b pb-2">📋 통합 안치 현황 (Master View)</h2>
+            
+            {SUPABASE_URL.includes('여기에') ? (
+              <div className="text-center py-10 bg-red-50 text-red-600 font-bold rounded-lg border border-red-200">
+                🚨 코드 내의 SUPABASE_URL과 SUPABASE_KEY를 입력해 주십시오.
+              </div>
+            ) : loading ? (
+              <div className="text-center py-10 text-slate-500 font-bold flex flex-col items-center">
+                <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+                Supabase 데이터베이스와 통신 중...
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left whitespace-nowrap">
+                  <thead className="bg-slate-100 text-slate-600">
+                    <tr>
+                      <th className="px-4 py-3 rounded-tl-lg font-bold">위치 (안치번호)</th>
+                      <th className="px-4 py-3 font-bold">계약자</th>
+                      <th className="px-4 py-3 font-bold">고인명</th>
+                      <th className="px-4 py-3 font-bold text-center">각인 상태</th>
+                      <th className="px-4 py-3 rounded-tr-lg font-bold text-right">실제 안치일</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {dataList.length === 0 ? (
+                      <tr><td colSpan="5" className="text-center py-8 text-gray-500">조회된 데이터가 없습니다.</td></tr>
+                    ) : (
+                      dataList.map((row, idx) => (
+                        <tr key={idx} className="hover:bg-blue-50 transition-colors">
+                          <td className="px-4 py-3 font-bold text-blue-700">{row.안치번호 || '-'}</td>
+                          <td className="px-4 py-3 text-slate-700">{row.마스터_계약자 || '-'}</td>
+                          <td className="px-4 py-3 font-bold text-slate-900">{row.마스터_고인명 || '-'}</td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`px-2 py-1 rounded text-xs font-bold ${
+                              row.각인_진행상태 === '설치완료' ? 'bg-green-100 text-green-700' :
+                              row.각인_진행상태 === '접수' ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-gray-100 text-gray-600'
+                            }`}>
+                              {row.각인_진행상태 || '미등록'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right text-slate-600 font-medium">
+                            {row.실제_안치일정 ? row.실제_안치일정.substring(0, 10) : '-'}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </Layout>
+      );
+    }
+
+    // 렌더링 실행
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<Dashboard />);
   </script>
 </body>
 </html>
