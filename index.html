@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Jake WorkOS V22 - Back to Basics</title>
+  <title>Jake WorkOS V23 - Organic Map Selector</title>
   
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -30,7 +30,6 @@
     .modal-enter { animation: fadeIn 0.2s ease-out; }
     @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
 
-    /* 🗺️ 현장 지도 렌더링 물리 엔진 (우측 잘림 방지를 위해 w-max에서 min-w-max 계열로 변경) */
     .map-row { display: flex; flex-direction: row; justify-content: flex-start; gap: 4px; margin-bottom: 4px; width: max-content; }
     .map-slot { width: 85px; min-width: 85px; height: 70px; border-radius: 4px; border: 1px solid #cbd5e1; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; transition: transform 0.1s; }
     .map-slot:active { opacity: 0.7; transform: scale(0.95); }
@@ -38,7 +37,6 @@
     .slot-id { font-size: 10px; font-weight: 800; margin-bottom: 2px; }
     .slot-name { font-size: 11px; font-weight: 800; text-align: center; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 2px; letter-spacing: -0.5px; }
 
-    /* 모달 폼 스타일 */
     .form-input { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; font-weight: bold; color: #1e293b; outline: none; transition: border-color 0.2s; background-color: #f8fafc; }
     .form-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); background-color: #ffffff; }
     .form-label { display: block; font-size: 11px; font-weight: 900; color: #64748b; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -86,7 +84,7 @@
         if (this.state.hasError) {
           return (
             <div className="p-8 m-4 bg-rose-50 border-2 border-rose-500 rounded-xl shadow-lg">
-              <h1 className="text-xl font-black text-rose-700 mb-2">🚨 V22 시스템 오류</h1>
+              <h1 className="text-xl font-black text-rose-700 mb-2">🚨 V23 시스템 오류</h1>
               <pre className="text-xs bg-white p-4 rounded border border-rose-200 overflow-auto">{this.state.error?.toString()}</pre>
             </div>
           );
@@ -95,11 +93,10 @@
       }
     }
 
-    // 🧱 다중 모달 컴포넌트
     function Modal({ isOpen, onClose, title, children, isNested = false }) {
       if (!isOpen) return null;
       const zIndex = isNested ? "z-[110]" : "z-[100]"; 
-      const bgOpacity = isNested ? "bg-slate-900/40" : "bg-slate-900/60";
+      const bgOpacity = isNested ? "bg-slate-900/50" : "bg-slate-900/70";
 
       return (
         <div className={`fixed inset-0 flex items-center justify-center p-4 ${bgOpacity} ${zIndex}`} onClick={onClose}>
@@ -114,8 +111,106 @@
       );
     }
 
-    // 📊 통합 대시보드
-    function DashboardView() {
+    // 🗺️ 유기적 연동: 지도 팝업 선택기 컴포넌트
+    function MapSelectorModal({ isOpen, onClose, layoutData, onSelectLocation }) {
+      const [area, setArea] = useState('A2/가');
+      const [data, setData] = useState([]);
+      const [loading, setLoading] = useState(false);
+
+      useEffect(() => {
+        if(!isOpen) return;
+        const fetchField = async () => {
+          setLoading(true);
+          try {
+            const res = await supabaseClient.from('field_data').select('위치_번호, 계약_상태, 성함').eq('구역', area);
+            setData(res.data || []);
+          } catch(e) { console.error(e); }
+          setLoading(false);
+        };
+        fetchField();
+      }, [area, isOpen]);
+
+      const renderedGrid = useMemo(() => {
+        if (!layoutData || !layoutData[area]) return [];
+        const dataMap = {};
+        data.forEach(item => { if (item.위치_번호) dataMap[item.위치_번호] = item; });
+        const comp = layoutData[area];
+        let finalRows = [];
+
+        if (Array.isArray(comp[0])) finalRows = comp;
+        else {
+            const flat = [];
+            comp.forEach(item => {
+                if (typeof item === 'string' && item.startsWith('_')) {
+                    const count = parseInt(item.substring(1)) || 1;
+                    for(let i=0; i<count; i++) flat.push('SPACER');
+                } else flat.push(item);
+            });
+            const config = ROW_CONFIG[area] || [20];
+            let idx = 0;
+            config.forEach(cnt => {
+                if(idx < flat.length) { finalRows.push(flat.slice(idx, idx + cnt)); idx += cnt; }
+            });
+        }
+
+        return finalRows.map((rowSlots, rIdx) => ({
+            rowNum: rIdx + 1,
+            slots: rowSlots.map((slotId, sIdx) => {
+                if (!slotId || slotId === 'SPACER' || (typeof slotId === 'string' && slotId.startsWith('_'))) {
+                     return { type: 'spacer', id: `spacer-${rIdx}-${sIdx}` };
+                }
+                return { type: 'data', ...(dataMap[slotId] || { 위치_번호: slotId, 계약_상태: '미분양' }) };
+            })
+        }));
+      }, [data, area, layoutData]);
+
+      if (!isOpen) return null;
+
+      return (
+        <div className="fixed inset-0 flex items-center justify-center p-2 sm:p-4 bg-slate-900/80 z-[120]" onClick={onClose}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl h-[80vh] flex flex-col modal-enter" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-800 shrink-0">
+              <h3 className="text-lg font-black text-white tracking-tight">📍 맵에서 위치 찾기</h3>
+              <button onClick={onClose} className="p-1 bg-slate-700 hover:bg-slate-600 rounded-lg text-white font-bold transition">닫기</button>
+            </div>
+            
+            <div className="flex gap-2 overflow-x-auto p-3 border-b border-slate-200 bg-slate-100 no-scrollbar shrink-0" style={{ WebkitOverflowScrolling: 'touch' }}>
+              {SECTION_LIST.map(s => (
+                <button key={s} onClick={() => setArea(s)} className={`flex-none px-4 py-2 rounded-lg font-bold text-[13px] whitespace-nowrap transition-all border border-slate-300 ${area === s ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
+                  {s}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex-1 overflow-auto bg-[#F8FAFC] p-4 relative">
+              {loading ? (
+                <div className="flex h-full items-center justify-center font-black text-slate-400">데이터를 불러오는 중...</div>
+              ) : (
+                <div className="min-w-max pb-10 pr-10 mx-auto">
+                  {renderedGrid.map((row, rIdx) => (
+                    <div key={rIdx} className="map-row">
+                      {row.slots.map((s) => {
+                        if (s.type === 'spacer') return <div key={s.id} className="map-slot slot-spacer"></div>;
+                        const st = clean(s.계약_상태) || '미분양';
+                        const cols = { '안치':'bg-emerald-700 text-white opacity-40', '예약':'bg-amber-300 text-amber-900', '홀딩':'bg-rose-600 text-white', '미분양':'bg-white text-slate-600 hover:bg-blue-50 border-blue-200' };
+                        return (
+                          <div key={s.id || s.위치_번호} onClick={() => onSelectLocation(`${area} ${s.위치_번호}`)} className={`map-slot ${cols[st] || cols['미분양']}`}>
+                            <div className="slot-id">{s.위치_번호}</div>
+                            <div className="slot-name">{st === '미분양' ? '선택가능' : (clean(s.성함) || st)}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function DashboardView({ layoutData }) {
       const [loading, setLoading] = useState(true);
       const [events, setEvents] = useState([]);
       const [currentDate, setCurrentDate] = useState(new Date());
@@ -124,6 +219,9 @@
       const [undecidedModalOpen, setUndecidedModalOpen] = useState(false);
       const [salesModal, setSalesModal] = useState({ isOpen: false, data: null });
       const [schModal, setSchModal] = useState({ isOpen: false, data: null });
+      
+      const [mapSelectorOpen, setMapSelectorOpen] = useState(false);
+      const [selectedLocationStr, setSelectedLocationStr] = useState('');
 
       useEffect(() => {
         const fetchAll = async () => {
@@ -136,7 +234,7 @@
             const bEvs = (burRes.data || []).map(b => ({ id: b.id, type:'burial', date:normalizeDate(b.안치일), title:clean(b.고인명), sub:clean(b.위치), raw:b }));
             const sEvs = (salRes.data || []).map(s => {
               const custName = clean(s['고객(고인)명'] || s.고객_고인_명 || s.고객고인명 || '이름없음');
-              return { id: s.id, type:'sales', date:normalizeDate(s.답사일)||normalizeDate(s.등록일), title:custName, sub:`${clean(s.영업자사명)}/${clean(s.영업자성함)}`, status:s.현재상태, raw:s };
+              return { id: s.id, type:'sales', date:normalizeDate(s.답사일)||normalizeDate(s.등록일), title:custName, sub:`${clean(s.영업자사명)}/${clean(s.영업자성함)}`, status:s.현재상태, raw:s, regDate: new Date(normalizeDate(s.등록일) || 0) };
             });
             setEvents([...bEvs, ...sEvs].filter(e => e.date !== null));
           } catch (e) { console.error(e); } finally { setLoading(false); }
@@ -166,15 +264,14 @@
       }, [events, dailyModal.isOpen, dailyModal.dateStr]);
 
       const undecidedList = useMemo(() => {
-        return events.filter(e => e.type === 'sales' && e.status !== '안치확정' && e.status !== '취소');
+        // 기존 GAS 로직 복구: 최신 등록일이 위로 오도록 정렬 (미래 시간부터)
+        let list = events.filter(e => e.type === 'sales' && e.status !== '안치확정' && e.status !== '취소');
+        return list.sort((a, b) => b.regDate - a.regDate);
       }, [events]);
 
-      const handleCellClick = (dateStr, dayEvents) => {
-        setDailyModal({ isOpen: true, dateStr, events: dayEvents });
-      };
-
       return (
-        <div className="space-y-4 max-w-7xl mx-auto h-full flex flex-col">
+        <div className="space-y-4 max-w-7xl mx-auto h-full flex flex-col relative">
+          
           <div className="bg-slate-800 rounded-2xl p-4 shadow-lg text-white flex justify-between items-center shrink-0">
             <div>
               <p className="text-xs font-bold text-slate-400 mb-1">
@@ -189,18 +286,18 @@
           </div>
 
           <div className="bg-white rounded-2xl shadow border border-slate-200 flex flex-col h-full overflow-hidden">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center shrink-0">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center shrink-0 bg-slate-50">
               <div className="flex items-center space-x-4">
-                <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth()-1, 1))} className="px-3 py-1 bg-slate-100 hover:bg-slate-200 transition rounded-lg font-bold">◀</button>
-                <h2 className="text-xl font-black">{currentDate.getFullYear()}년 {currentDate.getMonth()+1}월</h2>
-                <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth()+1, 1))} className="px-3 py-1 bg-slate-100 hover:bg-slate-200 transition rounded-lg font-bold">▶</button>
+                <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth()-1, 1))} className="px-3 py-1 bg-white border border-slate-200 hover:bg-slate-100 transition rounded-lg font-bold">◀</button>
+                <h2 className="text-xl font-black text-slate-800">{currentDate.getFullYear()}년 {currentDate.getMonth()+1}월</h2>
+                <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth()+1, 1))} className="px-3 py-1 bg-white border border-slate-200 hover:bg-slate-100 transition rounded-lg font-bold">▶</button>
               </div>
             </div>
             
             <div className="px-4 pt-4 shrink-0">
-              <button onClick={() => setUndecidedModalOpen(true)} className="w-full bg-orange-50 hover:bg-orange-100 transition text-orange-600 border border-orange-200 font-black py-3 rounded-xl shadow-sm flex justify-between px-4">
+              <button onClick={() => setUndecidedModalOpen(true)} className="w-full bg-orange-50 hover:bg-orange-100 transition text-orange-700 border border-orange-200 font-black py-3 rounded-xl shadow-sm flex justify-between px-4">
                   <span>📍 영업 대기 및 선점 명단 확인</span>
-                  <span className="bg-orange-600 text-white px-2 py-0.5 rounded-lg">{undecidedList.length}건</span>
+                  <span className="bg-orange-500 text-white px-2 py-0.5 rounded-lg">{undecidedList.length}건</span>
               </button>
             </div>
 
@@ -211,7 +308,7 @@
                 </div>
                 <div className="grid grid-cols-7 gap-px flex-1">
                   {calendarDays.map((d,i)=>(
-                    <div key={i} onClick={()=>d && handleCellClick(d.dateStr, d.dayEvents)} className={`calendar-cell flex flex-col ${!d?'bg-slate-50 cursor-default':''}`}>
+                    <div key={i} onClick={()=>d && setDailyModal({isOpen: true, dateStr: d.dateStr, events: d.dayEvents})} className={`calendar-cell flex flex-col ${!d?'bg-slate-50 cursor-default':''}`}>
                       {d && (
                         <>
                           <div className={`text-right text-xs font-bold p-1 ${getTodayStr() === d.dateStr ? 'text-white bg-blue-600 inline-block self-end rounded-md px-2' : 'text-slate-500'}`}>{d.day}</div>
@@ -248,7 +345,7 @@
                     );
                   } else {
                     return (
-                      <div key={idx} onClick={() => { setDailyModal({...dailyModal, isOpen:false}); setSchModal({isOpen:true, data:ev}); }} className="p-3 rounded-xl border border-emerald-700 bg-emerald-600 text-white cursor-pointer hover:bg-emerald-700 transition shadow-sm">
+                      <div key={idx} onClick={() => { setDailyModal({...dailyModal, isOpen:false}); setSchModal({isOpen:true, data:ev}); setSelectedLocationStr(clean(ev.raw.위치)); }} className="p-3 rounded-xl border border-emerald-700 bg-emerald-600 text-white cursor-pointer hover:bg-emerald-700 transition shadow-sm">
                         <div className="font-black text-[13px] mb-1">🟢 [안치] {ev.title} <span className="float-right text-[11px] bg-black/20 px-1.5 rounded">{ev.sub}</span></div>
                         <div className="text-[11px] font-medium opacity-90 whitespace-pre-wrap">{clean(ev.raw.비고) || '특이사항 없음'}</div>
                       </div>
@@ -259,7 +356,7 @@
             )}
             <div className="mt-4 flex gap-2">
                 <button onClick={() => { setDailyModal({...dailyModal, isOpen:false}); setSalesModal({isOpen:true, data:null}); }} className="flex-1 py-3 bg-amber-50 text-amber-700 border border-amber-200 font-bold rounded-xl text-sm shadow-sm hover:bg-amber-100 transition">+ 영업 등록</button>
-                <button onClick={() => { setDailyModal({...dailyModal, isOpen:false}); setSchModal({isOpen:true, data:null}); }} className="flex-1 py-3 bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold rounded-xl text-sm shadow-sm hover:bg-emerald-100 transition">+ 안치 등록</button>
+                <button onClick={() => { setDailyModal({...dailyModal, isOpen:false}); setSelectedLocationStr(''); setSchModal({isOpen:true, data:null}); }} className="flex-1 py-3 bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold rounded-xl text-sm shadow-sm hover:bg-emerald-100 transition">+ 안치 등록</button>
             </div>
           </Modal>
 
@@ -337,7 +434,13 @@
                       <textarea className="form-input min-h-[80px]" defaultValue={clean(salesModal.data?.raw?.비고 || salesModal.data?.raw?.비고메모)} placeholder="특이사항..."></textarea>
                   </div>
                   <div className="flex gap-2 pt-2">
-                      {salesModal.data && <button className="flex-1 py-3 bg-red-50 text-red-600 font-black rounded-xl text-sm border border-red-100 hover:bg-red-100 transition">삭제 (보관)</button>}
+                      {/* ✅ 복구된 버튼: 취소/보관 vs 영구삭제 분리 */}
+                      {salesModal.data && (
+                        <div className="flex flex-1 flex-col gap-1">
+                          <button className="py-2 bg-slate-200 text-slate-600 font-bold rounded-lg text-xs hover:bg-slate-300">🚫 보관함 이동</button>
+                          <button className="py-2 bg-rose-100 text-rose-600 font-bold rounded-lg text-xs hover:bg-rose-200">🗑️ 영구 삭제</button>
+                        </div>
+                      )}
                       <button className="flex-[2] py-3 bg-blue-600 text-white font-black rounded-xl text-sm hover:bg-blue-700 transition shadow-lg shadow-blue-500/30">데이터 저장</button>
                   </div>
               </div>
@@ -366,39 +469,54 @@
                       </div>
                   </div>
                   <div className="input-group">
-                      <label className="form-label text-blue-600">위치정보 (지도 전송용)</label>
-                      <input type="text" className="form-input border-blue-200 bg-blue-50" defaultValue={clean(schModal.data?.raw?.위치) || ''} placeholder="예: B6/가/반송/4-9[1]" />
+                      <label className="form-label flex justify-between">
+                        <span className="text-blue-600">위치정보 (지도 전송용)</span>
+                      </label>
+                      <div className="flex gap-2">
+                        {/* ✅ 유기적 연동: 선택된 위치가 Input에 들어감 */}
+                        <input type="text" className="form-input border-blue-200 bg-blue-50 flex-1" value={selectedLocationStr} onChange={(e)=>setSelectedLocationStr(e.target.value)} placeholder="예: A6/가 1-1" />
+                        <button onClick={() => setMapSelectorOpen(true)} className="px-4 bg-slate-800 text-white rounded-lg font-bold text-xs whitespace-nowrap shadow-md hover:bg-slate-700">지도에서<br/>선택</button>
+                      </div>
                   </div>
                   <div className="input-group">
                       <label className="form-label">비고</label>
                       <textarea className="form-input min-h-[80px]" defaultValue={clean(schModal.data?.raw?.비고)} placeholder="특이사항..."></textarea>
                   </div>
+                  
+                  {/* ✅ 유기적 연동: 기존의 '현장전송' 버튼을 이 기능이 흡수할 예정 */}
+                  <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-200">
+                     <p className="text-[10px] font-black text-emerald-800">💡 [저장 시 자동 동기화]</p>
+                     <p className="text-xs font-bold text-emerald-700 mt-1">저장 버튼을 누르면, 입력한 '위치정보'를 찾아 현장 지도의 상태를 [안치]로 자동 업데이트합니다.</p>
+                  </div>
+
                   <div className="flex gap-2 pt-2">
-                      {schModal.data && <button className="flex-1 py-3 bg-red-50 text-red-600 font-black rounded-xl text-sm border border-red-100 hover:bg-red-100 transition">삭제</button>}
-                      <button className="flex-[2] py-3 bg-emerald-600 text-white font-black rounded-xl text-sm hover:bg-emerald-700 transition shadow-lg shadow-emerald-500/30">데이터 저장</button>
+                      {schModal.data && (
+                        <div className="flex flex-1 flex-col gap-1">
+                          <button className="py-2 bg-slate-200 text-slate-600 font-bold rounded-lg text-xs hover:bg-slate-300">🚫 보관함 이동</button>
+                          <button className="py-2 bg-rose-100 text-rose-600 font-bold rounded-lg text-xs hover:bg-rose-200">🗑️ 영구 삭제</button>
+                        </div>
+                      )}
+                      <button className="flex-[2] py-3 bg-emerald-600 text-white font-black rounded-xl text-sm hover:bg-emerald-700 transition shadow-lg shadow-emerald-500/30">데이터 저장 및 동기화</button>
                   </div>
               </div>
           </Modal>
+
+          <MapSelectorModal 
+             isOpen={mapSelectorOpen} 
+             onClose={() => setMapSelectorOpen(false)} 
+             layoutData={layoutData} 
+             onSelectLocation={(loc) => { setSelectedLocationStr(loc); setMapSelectorOpen(false); }} 
+          />
 
         </div>
       );
     }
 
-    // 📍 현장 지도 뷰 (JSON 비동기 로딩 = 원천 하얀 화면 방지)
-    function FieldView() {
+    function FieldView({ layoutData }) {
       const [loading, setLoading] = useState(true);
       const [data, setData] = useState([]);
       const [area, setArea] = useState('A2/가');
       const [slotModal, setSlotModal] = useState({ isOpen: false, data: null });
-      const [layoutData, setLayoutData] = useState({});
-
-      useEffect(() => {
-        // ✔️ 여기서 JSON을 별도 파일에서 불러오기 때문에 메인 코드가 가벼워집니다!
-        fetch('/map_layout.json')
-          .then(res => res.json())
-          .then(json => setLayoutData(json))
-          .catch(err => console.error("JSON Fetch Error:", err));
-      }, []);
 
       useEffect(() => {
         const fetchField = async () => {
@@ -551,6 +669,7 @@
     function App() {
       const [activeTab, setActiveTab] = useState('dash');
       const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 1024);
+      const [layoutData, setLayoutData] = useState({});
 
       useEffect(() => {
         const handleResize = () => {
@@ -561,13 +680,22 @@
         return () => window.removeEventListener('resize', handleResize);
       }, []);
 
+      useEffect(() => {
+        try {
+            const rawJSON = window.JAKE_MAP_RAW_JSON;
+            setLayoutData(JSON.parse(rawJSON));
+        } catch(e) {
+            console.error("Layout JSON Parse Error", e);
+        }
+      }, []);
+
       return (
         <div className="flex h-screen overflow-hidden bg-slate-900">
           {isSidebarOpen && <div className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-sm transition-opacity" onClick={() => setIsSidebarOpen(false)} />}
           
           <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 border-r border-slate-800 text-slate-300 transform transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:hidden'} flex flex-col shadow-2xl lg:shadow-none`}>
             <div className="p-6 border-b border-slate-800 flex justify-between items-center shrink-0">
-              <h1 className="text-xl font-black text-white tracking-tighter">JAKE WorkOS <span className="text-[10px] bg-emerald-500 px-1.5 py-0.5 rounded ml-1 text-slate-900">V22</span></h1>
+              <h1 className="text-xl font-black text-white tracking-tighter">JAKE WorkOS <span className="text-[10px] bg-emerald-500 px-1.5 py-0.5 rounded ml-1 text-slate-900">V23</span></h1>
               <button className="lg:hidden text-slate-400 hover:text-white transition font-bold" onClick={() => setIsSidebarOpen(false)}>✕</button>
             </div>
             <nav className="p-4 space-y-8 overflow-y-auto flex-1 no-scrollbar">
@@ -592,8 +720,8 @@
               </div>
             </header>
             <div className="flex-1 overflow-hidden p-2 md:p-4">
-              {activeTab === 'dash' && <DashboardView />}
-              {activeTab === 'field' && <FieldView />}
+              {activeTab === 'dash' && <DashboardView layoutData={layoutData} />}
+              {activeTab === 'field' && <FieldView layoutData={layoutData} />}
             </div>
           </main>
         </div>
