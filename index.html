@@ -3,165 +3,187 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Jake WorkOS - V7 (Final Sync)</title>
+  <title>Jake WorkOS V8 - Bulletproof</title>
+  
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
   <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
-    body { font-family: 'Pretendard', sans-serif; background-color: #f8fafc; overscroll-behavior-y: none; }
+    body { font-family: 'Pretendard', sans-serif; background-color: #f1f5f9; color: #1e293b; -webkit-font-smoothing: antialiased; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    .calendar-cell { min-height: 120px; transition: all 0.2s; }
-    .calendar-cell:hover { background-color: #f1f5f9; }
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background-color: #e2e8f0; border: 1px solid #e2e8f0; }
+    .calendar-cell { min-height: 120px; background-color: #fff; padding: 4px; transition: background 0.2s; }
+    .calendar-cell:hover { background-color: #f8fafc; }
+    @media (max-width: 640px) { .calendar-cell { min-height: 80px; font-size: 10px; } }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect, useMemo } = React;
+    const { useState, useEffect, useMemo, useCallback } = React;
 
+    // 🔐 Supabase Configuration
     const SUPABASE_URL = 'https://lqccxnciiajwqdmpwjdv.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxY2N4bmNpaWFqd3FkbXB3amR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MjA3MTMsImV4cCI6MjA4NzA5NjcxM30.L23-eq-DIPsbONOeX-xQ8UcMb7gtgTTTRpkaSm9HTw4';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // ==========================================
-    // 🛡️ 날짜 정규화 엔진 (문자열 강제 매칭 방식)
-    // ==========================================
-    const toDateString = (val) => {
-      if (!val) return null;
-      // 어떤 형식이든 숫자만 추출 (예: 2026.02.21 -> 20260221)
-      const cleaned = String(val).replace(/[^0-9]/g, '');
-      if (cleaned.length < 8) return null;
-      const y = cleaned.substring(0, 4);
-      const m = cleaned.substring(4, 6).padStart(2, '0');
-      const d = cleaned.substring(6, 8).padStart(2, '0');
-      return `${y}-${m}-${d}`;
+    // 🛡️ Data Sanitizer (First Principles)
+    const clean = (val) => {
+      if (!val || val === '0.0' || val === '0' || val === 'null' || val === ' -  - ') return '';
+      return String(val).trim();
+    };
+
+    const normalizeDate = (dateVal) => {
+      if (!dateVal) return null;
+      const d = new Date(String(dateVal).replace(/\./g, '-').replace(/\s/g, ''));
+      return isNaN(d.getTime()) ? null : d.toISOString().split('T')[0];
     };
 
     // ==========================================
-    // 🧩 공통 컴포넌트: Layout
+    // 🧩 UI Component: Navigation Sidebar
     // ==========================================
-    function Layout({ activeTab, setActiveTab, children }) {
-      const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-      const navItems = [
-        { id: 'dashboard', icon: '📊', label: '통합 대시보드' },
-        { id: 'field', icon: '🔍', label: '현장 관리 (Grid)' },
-        { id: 'engraving', icon: '⚰️', label: '각인 관리' },
-        { id: 'project', icon: '🚀', label: '프로젝트 (WorkOS)' }
+    function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen }) {
+      const menus = [
+        { group: '공유앱 (TEAM)', items: [
+          { id: 'dash', icon: '📊', label: '통합 대시보드' },
+          { id: 'field', icon: '🔍', label: '현장관리 (Grid)' },
+          { id: 'hr', icon: '🏖️', label: '근태관리' }
+        ]},
+        { group: 'WorkOS (JAKE)', items: [
+          { id: 'project', icon: '🚀', label: '프로젝트 칸반' },
+          { id: 'engraving', icon: '⚰️', label: '각인관리' },
+          { id: 'meeting', icon: '📝', label: '회의록/현안' },
+          { id: 'contact', icon: '📇', label: '연락처' }
+        ]}
       ];
 
       return (
-        <div className="flex h-screen overflow-hidden text-slate-800">
-          {isSidebarOpen && <div className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden" onClick={() => setIsSidebarOpen(false)} />}
-          <aside className={`fixed md:static inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 transform transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} flex flex-col shadow-xl md:shadow-none`}>
-            <div className="p-6 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-              <h1 className="font-black text-xl text-blue-600 tracking-tighter">Jake WorkOS</h1>
-              <button className="md:hidden text-slate-400" onClick={() => setIsSidebarOpen(false)}>✕</button>
+        <>
+          {isOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setIsOpen(false)} />}
+          <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 transform transition-transform duration-300 lg:translate-x-0 lg:static ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+            <div className="p-6 border-b border-slate-800 flex justify-between items-center">
+              <h1 className="text-xl font-black text-white tracking-tighter">JAKE WorkOS <span className="text-xs bg-blue-600 px-1.5 py-0.5 rounded ml-1">V8</span></h1>
+              <button className="lg:hidden text-slate-400" onClick={() => setIsOpen(false)}>✕</button>
             </div>
-            <nav className="p-4 space-y-1.5 flex-1 overflow-y-auto no-scrollbar">
-              {navItems.map(item => (
-                <button
-                  key={item.id}
-                  onClick={() => { setActiveTab(item.id); setIsSidebarOpen(false); }}
-                  className={`w-full text-left p-3.5 rounded-xl font-bold transition-all duration-200 ${
-                    activeTab === item.id 
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 scale-[1.02]' 
-                      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                  }`}
-                >
-                  <span className="mr-3">{item.icon}</span>{item.label}
-                </button>
+            <nav className="p-4 space-y-8 overflow-y-auto h-[calc(100vh-80px)] no-scrollbar">
+              {menus.map(group => (
+                <div key={group.group}>
+                  <p className="text-[10px] font-bold text-slate-500 mb-3 ml-2 uppercase tracking-widest">{group.group}</p>
+                  <div className="space-y-1">
+                    {group.items.map(item => (
+                      <button
+                        key={item.id}
+                        onClick={() => { setActiveTab(item.id); setIsOpen(false); }}
+                        className={`w-full flex items-center px-3 py-2.5 rounded-lg font-bold text-sm transition-all ${activeTab === item.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'hover:bg-slate-800 hover:text-white'}`}
+                      >
+                        <span className="mr-3 text-lg">{item.icon}</span> {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </nav>
           </aside>
-
-          <main className="flex-1 flex flex-col h-screen overflow-hidden bg-[#F1F5F9]">
-            <header className="h-16 bg-white border-b border-slate-200 flex items-center px-6 shrink-0 z-10 justify-between shadow-sm">
-              <div className="flex items-center">
-                <button className="md:hidden p-2 text-slate-600 rounded-lg bg-slate-100 mr-4" onClick={() => setIsSidebarOpen(true)}>☰</button>
-                <div className="font-black text-xl text-slate-800">{navItems.find(i => i.id === activeTab)?.label}</div>
-              </div>
-              <div className="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1.5 rounded-full">SYSTEM ACTIVE</div>
-            </header>
-            <div className="flex-1 overflow-y-auto p-4 md:p-8 no-scrollbar">{children}</div>
-          </main>
-        </div>
+        </>
       );
     }
 
     // ==========================================
-    // 📊 탭 1: Dashboard (달력 고도화)
+    // 📊 View: Unified Dashboard (Calendar)
     // ==========================================
     function DashboardView() {
       const [loading, setLoading] = useState(true);
-      const [dataList, setDataList] = useState([]);
+      const [events, setEvents] = useState([]); // Integrated Events
       const [currentDate, setCurrentDate] = useState(new Date());
 
-      useEffect(() => {
-        const load = async () => {
-          setLoading(true);
-          try {
-            const { data, error } = await supabaseClient
-              .from('view_master_dashboard')
-              .select('*');
-            if (error) throw error;
-            
-            // 데이터를 가져올 때 날짜를 미리 정규화
-            const processed = (data || []).map(row => ({
-              ...row,
-              matchKey: toDateString(row.실제_안치일정)
-            })).filter(row => row.matchKey !== null);
-            
-            setDataList(processed);
-          } catch (e) { console.error(e); }
-          finally { setLoading(false); }
-        };
-        load();
+      const fetchAllData = useCallback(async () => {
+        setLoading(true);
+        try {
+          // 1. Fetch tables in parallel (Multi-Source Fetching)
+          const [burialRes, salesRes] = await Promise.all([
+            supabaseClient.from('burial_schedule').select('*'),
+            supabaseClient.from('status_mgmt').select('*')
+          ]);
+
+          // 2. Client-side Merging (First Principles: Avoid rigid SQL joins)
+          const burialEvents = (burialRes.data || []).map(b => ({
+            type: 'burial',
+            date: normalizeDate(b.안치일),
+            title: `🟢 ${clean(b.고인명)}`,
+            sub: clean(b.위치),
+            raw: b
+          }));
+
+          const salesEvents = (salesRes.data || []).map(s => ({
+            type: 'sales',
+            date: normalizeDate(s.답사일) || normalizeDate(s.등록일),
+            title: `🟡 ${clean(s.고객_고인_명)}`,
+            sub: `${clean(s.영업자사명)}/${clean(s.영업자성함)}`,
+            status: s.현재상태,
+            raw: s
+          })).filter(s => s.status !== '상담 후 대기');
+
+          // 3. Combine everything
+          setEvents([...burialEvents, ...salesEvents].filter(e => e.date !== null));
+        } catch (err) {
+          console.error("Data Load Error:", err);
+        } finally {
+          setLoading(false);
+        }
       }, []);
+
+      useEffect(() => { fetchAllData(); }, [fetchAllData]);
 
       const calendarDays = useMemo(() => {
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth();
-        const firstDay = new Date(year, month, 1).getDay();
-        const startOffset = firstDay === 0 ? 6 : firstDay - 1; 
+        const startDay = new Date(year, month, 1).getDay();
+        const offset = startDay === 0 ? 6 : startDay - 1; // Mon Start
         const lastDate = new Date(year, month + 1, 0).getDate();
         
         const days = [];
-        for (let i = 0; i < startOffset; i++) days.push(null);
+        for (let i = 0; i < offset; i++) days.push(null);
         for (let i = 1; i <= lastDate; i++) {
           const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-          const events = dataList.filter(row => row.matchKey === dateStr);
-          days.push({ day: i, dateStr, events });
+          days.push({ day: i, dateStr, dayEvents: events.filter(e => e.date === dateStr) });
         }
         return days;
-      }, [currentDate, dataList]);
+      }, [currentDate, events]);
 
       return (
-        <div className="max-w-6xl mx-auto space-y-6">
-          <div className="bg-white rounded-2xl shadow-xl shadow-slate-200 border border-slate-100 overflow-hidden">
-            <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-white">
-              <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-2.5 hover:bg-slate-100 rounded-full transition">◀</button>
-              <h2 className="font-black text-2xl text-slate-800">{currentDate.getFullYear()}년 {currentDate.getMonth() + 1}월</h2>
-              <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-2.5 hover:bg-slate-100 rounded-full transition">▶</button>
+        <div className="space-y-6 max-w-7xl mx-auto">
+          <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-200 overflow-hidden">
+            <div className="p-6 bg-white border-b border-slate-100 flex justify-between items-center">
+              <div className="flex items-center space-x-4">
+                <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-2 hover:bg-slate-100 rounded-full transition">◀</button>
+                <h2 className="text-2xl font-black text-slate-800 tracking-tight">{currentDate.getFullYear()}년 {currentDate.getMonth() + 1}월</h2>
+                <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-2 hover:bg-slate-100 rounded-full transition">▶</button>
+              </div>
+              <div className="flex space-x-2 text-xs font-bold">
+                <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded border border-emerald-200">🟢 안치일정</span>
+                <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded border border-amber-200">🟡 영업/답사</span>
+              </div>
             </div>
-            
-            <div className="grid grid-cols-7 gap-px bg-slate-100">
+
+            <div className="calendar-grid">
               {['월', '화', '수', '목', '금', '토', '일'].map((d, i) => (
-                <div key={d} className={`p-4 text-center text-sm font-black bg-slate-50 ${i === 6 ? 'text-red-500' : i === 5 ? 'text-blue-500' : 'text-slate-400'}`}>{d}</div>
+                <div key={d} className={`p-3 text-center text-xs font-black bg-slate-50 border-b border-slate-200 ${i === 6 ? 'text-red-500' : i === 5 ? 'text-blue-500' : 'text-slate-400'}`}>{d}</div>
               ))}
               {calendarDays.map((d, i) => (
-                <div key={i} className={`calendar-cell bg-white p-2 border-t border-slate-50 ${!d ? 'bg-slate-50/50' : ''}`}>
+                <div key={i} className={`calendar-cell ${!d ? 'bg-slate-50/30' : ''}`}>
                   {d && (
                     <>
-                      <div className={`text-right text-xs font-bold mb-2 ${new Date().toISOString().split('T')[0] === d.dateStr ? 'text-blue-600 underline decoration-2' : 'text-slate-300'}`}>{d.day}</div>
-                      <div className="space-y-1.5 overflow-y-auto no-scrollbar max-h-[85px]">
-                        {d.events.map((ev, idx) => (
-                          <div key={idx} className="text-[10px] sm:text-[11px] bg-emerald-500 text-white px-2 py-1.5 rounded-lg font-bold shadow-sm border border-emerald-600 truncate leading-none">
-                            {ev.마스터_고인명 || ev.마스터_계약자} <span className="opacity-75 font-normal">({ev.안치번호?.split('/').pop()})</span>
+                      <div className="text-right font-bold text-xs text-slate-400 mb-1">{d.day}</div>
+                      <div className="space-y-1 max-h-[85px] overflow-y-auto no-scrollbar">
+                        {d.dayEvents.map((ev, idx) => (
+                          <div key={idx} className={`px-1.5 py-1 rounded text-[10px] font-bold truncate border shadow-sm ${ev.type === 'burial' ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-amber-400 text-amber-900 border-amber-500'}`}>
+                            {ev.title}
                           </div>
                         ))}
                       </div>
@@ -176,62 +198,55 @@
     }
 
     // ==========================================
-    // 🔍 탭 2: Field Map (Grid Slot)
+    // 🔍 View: Field Grid Map
     // ==========================================
     function FieldView() {
       const [loading, setLoading] = useState(true);
-      const [slots, setSlots] = useState([]);
-      const [selectedArea, setSelectedArea] = useState('A6');
+      const [data, setData] = useState([]);
+      const [area, setArea] = useState('A6/가');
 
       useEffect(() => {
-        const fetch = async () => {
+        const fetchField = async () => {
           setLoading(true);
-          const { data } = await supabaseClient
-            .from('official_records')
-            .select('안치번호, 계약현황, 고인명, 계약자1')
-            .like('안치번호', `${selectedArea}%`)
-            .order('안치번호', { ascending: true });
-          setSlots(data || []);
+          const { data } = await supabaseClient.from('field_data').select('*').eq('구역', area).order('위치_번호', { ascending: true });
+          setData(data || []);
           setLoading(false);
         };
-        fetch();
-      }, [selectedArea]);
+        fetchField();
+      }, [area]);
+
+      const sectionList = ['A2/가','A3/가','A4/가','A4/나','A4/다','A5/가','A5/나','A6/가','A6/나','B1/가','B2/가','B3/가','B4/가','B5/가','B6/가/1-12','B6/가/13-14','C1/가'];
 
       return (
-        <div className="max-w-6xl mx-auto space-y-6">
-          <div className="flex gap-2 overflow-x-auto pb-3 no-scrollbar shrink-0">
-            {['A4', 'A5', 'A6', 'B2', 'B5'].map(area => (
+        <div className="space-y-6 max-w-7xl mx-auto">
+          <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar shrink-0">
+            {sectionList.map(s => (
               <button 
-                key={area}
-                onClick={() => setSelectedArea(area)}
-                className={`px-6 py-3 rounded-2xl font-black text-sm transition-all duration-200 shadow-sm border ${
-                  selectedArea === area ? 'bg-slate-800 text-white border-slate-800 scale-105' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
-                }`}
+                key={s} 
+                onClick={() => setArea(s)}
+                className={`px-4 py-2 rounded-xl font-bold text-xs whitespace-nowrap transition-all border shadow-sm ${area === s ? 'bg-slate-800 text-white border-slate-800 scale-105' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'}`}
               >
-                {area} 구역
+                {s}
               </button>
             ))}
           </div>
 
-          <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200 border border-slate-100">
-            {loading ? (
-              <div className="flex flex-col items-center justify-center h-64 space-y-4">
-                <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                <div className="font-bold text-slate-400 italic">MAP SYNCHRONIZING...</div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-10 lg:grid-cols-12 gap-3">
-                {slots.map((slot, i) => {
-                  const statusColor = slot.계약현황 === '장례' ? 'bg-emerald-100 border-emerald-200 text-emerald-700' :
-                                    slot.계약현황 === '선분양' ? 'bg-blue-100 border-blue-200 text-blue-700' :
-                                    'bg-slate-50 border-slate-100 text-slate-300';
+          <div className="bg-white p-6 rounded-2xl shadow-xl border border-slate-200 min-h-[500px]">
+            {loading ? <div className="p-40 text-center font-bold text-slate-300 animate-pulse">MAP RENDERING...</div> : (
+              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12 gap-3">
+                {data.map((item, idx) => {
+                  const status = clean(item.계약_상태) || '미분양';
+                  const colors = {
+                    '안치': 'bg-emerald-600 text-white border-emerald-700',
+                    '예약': 'bg-amber-400 text-amber-900 border-amber-500 font-black',
+                    '계약금': 'bg-amber-100 text-amber-700 border-amber-200',
+                    '홀딩': 'bg-rose-600 text-white border-rose-700',
+                    '미분양': 'bg-slate-50 text-slate-300 border-slate-100'
+                  };
                   return (
-                    <div 
-                      key={i} 
-                      className={`aspect-square rounded-xl border-2 flex flex-col items-center justify-center p-2 transition-all hover:scale-110 cursor-pointer shadow-sm ${statusColor}`}
-                    >
-                      <div className="text-[9px] opacity-60 mb-1">{slot.안치번호.split('/').pop()}</div>
-                      <div className="text-[11px] font-black truncate w-full text-center">{slot.고인명 || slot.계약자1 || ''}</div>
+                    <div key={idx} className={`aspect-square rounded-xl border flex flex-col items-center justify-center p-2 text-center transition-transform hover:scale-110 cursor-pointer shadow-sm ${colors[status] || colors['미분양']}`}>
+                      <div className="text-[9px] opacity-70 mb-1">{item.위치_번호}</div>
+                      <div className="text-[11px] font-black leading-tight truncate w-full">{clean(item.성함) || clean(item.계약자) || (status === '미분양' ? 'EMPTY' : status)}</div>
                     </div>
                   );
                 })}
@@ -243,17 +258,43 @@
     }
 
     // ==========================================
-    // ⚙️ App Root
+    // ⚙️ Main Application Controller
     // ==========================================
     function App() {
-      const [activeTab, setActiveTab] = useState('dashboard');
+      const [activeTab, setActiveTab] = useState('dash');
+      const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
       return (
-        <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
-          {activeTab === 'dashboard' && <DashboardView />}
-          {activeTab === 'field' && <FieldView />}
-          {activeTab === 'engraving' && <div className="p-20 text-center font-black text-slate-300 italic">ENGRAVING MODULE READY</div>}
-          {activeTab === 'project' && <div className="p-20 text-center font-black text-slate-300 italic">WORKOS MODULE READY</div>}
-        </Layout>
+        <div className="flex h-screen overflow-hidden">
+          <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
+          
+          <main className="flex-1 flex flex-col h-screen overflow-hidden">
+            <header className="h-16 bg-white border-b border-slate-200 flex items-center px-6 shrink-0 justify-between z-30">
+              <div className="flex items-center">
+                <button className="lg:hidden p-2 text-slate-500 bg-slate-100 rounded-lg mr-4" onClick={() => setIsSidebarOpen(true)}>☰</button>
+                <h2 className="font-black text-xl text-slate-800 uppercase tracking-tighter">
+                  {activeTab === 'dash' ? 'Integrated Dashboard' : activeTab === 'field' ? 'Field Management' : activeTab}
+                </h2>
+              </div>
+              <div className="flex items-center space-x-4">
+                <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" title="Supabase Connected" />
+                <span className="text-[10px] font-black text-slate-400">JAKE ZEPHYRUS-G14 // CONNECTED</span>
+              </div>
+            </header>
+
+            <div className="flex-1 overflow-y-auto p-4 md:p-8 no-scrollbar bg-[#F8FAFC]">
+              {activeTab === 'dash' && <DashboardView />}
+              {activeTab === 'field' && <FieldView />}
+              {['hr', 'project', 'engraving', 'meeting', 'contact'].includes(activeTab) && (
+                <div className="flex flex-col items-center justify-center h-full text-slate-300">
+                  <span className="text-6xl mb-4">⚙️</span>
+                  <p className="font-black text-xl uppercase tracking-widest italic">Module "{activeTab}" under construction</p>
+                  <p className="text-sm mt-2 font-bold text-slate-400">Phase 6: WorkOS Core Porting scheduled next.</p>
+                </div>
+              )}
+            </div>
+          </main>
+        </div>
       );
     }
 
