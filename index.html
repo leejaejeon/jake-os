@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Jake WorkOS V19 - Smart Dashboard & CRUD</title>
+  <title>Jake WorkOS V20 - Complete Modal Engine</title>
   
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -37,17 +37,17 @@
     .slot-id { font-size: 10px; font-weight: 800; margin-bottom: 2px; }
     .slot-name { font-size: 11px; font-weight: 800; text-align: center; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 2px; letter-spacing: -0.5px; }
 
-    /* 모달 내부 폼 요소 스타일링 */
-    .form-input { width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; font-weight: bold; color: #1e293b; outline: none; transition: border-color 0.2s; }
-    .form-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
-    .form-label { display: block; font-size: 10px; font-weight: 900; color: #64748b; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    /* 폼 입력창 스타일 */
+    .form-input { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; font-weight: bold; color: #1e293b; outline: none; transition: all 0.2s; background-color: #f8fafc; }
+    .form-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); background-color: #ffffff; }
+    .form-label { display: block; font-size: 11px; font-weight: 900; color: #64748b; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect, useMemo, useCallback } = React;
+    const { useState, useEffect, useMemo } = React;
 
     const SUPABASE_URL = 'https://lqccxnciiajwqdmpwjdv.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxY2N4bmNpaWFqd3FkbXB3amR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MjA3MTMsImV4cCI6MjA4NzA5NjcxM30.L23-eq-DIPsbONOeX-xQ8UcMb7gtgTTTRpkaSm9HTw4';
@@ -78,28 +78,11 @@
       'B6/가/1-12':[47,52,53,52,53,53,54,54,54,53,55,54,50], 'B6/가/13-14':[75,75,75,75,75,75,75,75,75] 
     };
 
-    class ErrorBoundary extends React.Component {
-      constructor(props) { super(props); this.state = { hasError: false, error: null }; }
-      static getDerivedStateFromError(error) { return { hasError: true, error }; }
-      render() {
-        if (this.state.hasError) {
-          return (
-            <div className="p-8 m-4 bg-rose-50 border-2 border-rose-500 rounded-xl shadow-lg">
-              <h1 className="text-xl font-black text-rose-700 mb-2">🚨 V19 시스템 오류</h1>
-              <pre className="text-xs bg-white p-4 rounded border border-rose-200 overflow-auto">{this.state.error?.toString()}</pre>
-            </div>
-          );
-        }
-        return this.props.children; 
-      }
-    }
-
     // ==========================================
     // 🧱 Component: Global Modal System (Nested Support)
     // ==========================================
     function Modal({ isOpen, onClose, title, children, isNested = false }) {
       if (!isOpen) return null;
-      // 다중 모달일 경우 z-index를 높여서 위로 올림
       const zIndex = isNested ? "z-[110]" : "z-[100]"; 
       const bgOpacity = isNested ? "bg-slate-900/40" : "bg-slate-900/60";
 
@@ -117,16 +100,18 @@
     }
 
     // ==========================================
-    // 📊 View: Unified Dashboard (Headline & CRUD)
+    // 📊 View: Unified Dashboard
     // ==========================================
     function DashboardView() {
       const [loading, setLoading] = useState(true);
       const [events, setEvents] = useState([]);
       const [currentDate, setCurrentDate] = useState(new Date());
       
-      // 모달 상태 관리
+      // 모달 상태 관리 (전면 분리)
       const [dailyModal, setDailyModal] = useState({ isOpen: false, dateStr: '', events: [] });
-      const [editModal, setEditModal] = useState({ isOpen: false, data: null });
+      const [undecidedModalOpen, setUndecidedModalOpen] = useState(false);
+      const [salesModal, setSalesModal] = useState({ isOpen: false, data: null });
+      const [schModal, setSchModal] = useState({ isOpen: false, data: null });
 
       useEffect(() => {
         const fetchAll = async () => {
@@ -140,7 +125,7 @@
             const sEvs = (salRes.data || []).map(s => {
               const custName = clean(s['고객(고인)명'] || s.고객_고인_명 || s.고객고인명 || '이름없음');
               return { id: s.id, type:'sales', date:normalizeDate(s.답사일)||normalizeDate(s.등록일), title:custName, sub:`${clean(s.영업자사명)}/${clean(s.영업자성함)}`, status:s.현재상태, raw:s };
-            }).filter(s => s.status !== '상담 후 대기');
+            });
             setEvents([...bEvs, ...sEvs].filter(e => e.date !== null));
           } catch (e) { console.error("Dashboard Fetch Error:", e); } finally { setLoading(false); }
         };
@@ -155,36 +140,35 @@
         for (let i = 0; i < offset; i++) days.push(null);
         for (let i = 1; i <= lastDate; i++) {
           const ds = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-          days.push({ day: i, dateStr: ds, dayEvents: events.filter(e => e.date === ds) });
+          days.push({ day: i, dateStr: ds, dayEvents: events.filter(e => e.date === ds && e.status !== '상담 후 대기') });
         }
         return days;
       }, [currentDate, events]);
 
-      // 🧠 동적 헤드라인 통계 계산 로직
       const headlineStats = useMemo(() => {
         const targetDate = dailyModal.isOpen ? dailyModal.dateStr : getTodayStr();
         const todaysEvents = events.filter(e => e.date === targetDate);
         
         const burials = todaysEvents.filter(e => e.type === 'burial').length;
-        const sales = todaysEvents.filter(e => e.type === 'sales').length;
-        const hr = 0; // 근태관리는 아직 연결 안됨
+        const sales = todaysEvents.filter(e => e.type === 'sales' && (e.status === '답사대기' || e.status === '답사완료')).length;
+        const hr = 0; // 근태 연결 전
         
         return { targetDate, burials, sales, hr };
       }, [events, dailyModal.isOpen, dailyModal.dateStr]);
+
+      const undecidedList = useMemo(() => {
+        // 영업건 중 안치확정, 취소가 아닌 모든 대기 명단
+        return events.filter(e => e.type === 'sales' && e.status !== '안치확정' && e.status !== '취소');
+      }, [events]);
 
       const handleCellClick = (dateStr, dayEvents) => {
         setDailyModal({ isOpen: true, dateStr, events: dayEvents });
       };
 
-      const handleEventClick = (ev) => {
-        // 상세 수정 모달 열기 (기존 모달 위에 덮어씌움)
-        setEditModal({ isOpen: true, data: ev });
-      };
-
       return (
         <div className="space-y-4 max-w-7xl mx-auto h-full flex flex-col">
           
-          {/* ✅ 동적 헤드라인 영역 */}
+          {/* ✅ 동적 헤드라인 */}
           <div className="bg-slate-800 rounded-2xl p-4 shadow-lg text-white flex justify-between items-center shrink-0">
             <div>
               <p className="text-xs font-bold text-slate-400 mb-1">
@@ -196,10 +180,6 @@
                 <div className="flex items-end gap-1"><span className="text-2xl font-black text-blue-400">{headlineStats.hr}</span><span className="text-sm font-bold text-slate-300 pb-1">휴무</span></div>
               </div>
             </div>
-            <div className="hidden sm:block text-right">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Jake WorkOS</p>
-              <p className="text-sm font-black text-emerald-400">DATABASE ACTIVE</p>
-            </div>
           </div>
 
           <div className="bg-white rounded-2xl shadow border border-slate-200 flex flex-col h-full overflow-hidden">
@@ -210,7 +190,16 @@
                 <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth()+1, 1))} className="px-3 py-1 bg-slate-100 hover:bg-slate-200 transition rounded-lg font-bold">▶</button>
               </div>
             </div>
-            <div className="flex-1 overflow-auto bg-slate-50 p-2 md:p-4">
+            
+            {/* 영업 대기 명단 바 */}
+            <div className="px-4 pt-4 shrink-0">
+              <button onClick={() => setUndecidedModalOpen(true)} className="w-full bg-orange-50 hover:bg-orange-100 transition text-orange-600 border border-orange-200 font-black py-3 rounded-xl shadow-sm flex justify-between px-4">
+                  <span>📍 영업 대기 및 선점 명단 확인</span>
+                  <span className="bg-orange-600 text-white px-2 py-0.5 rounded-lg">{undecidedList.length}건</span>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto bg-white p-2 md:p-4">
               <div className="min-w-[700px] h-full flex flex-col border border-slate-200 rounded-xl shadow-sm bg-slate-200 gap-px">
                 <div className="grid grid-cols-7 gap-px shrink-0">
                   {['월','화','수','목','금','토','일'].map((d,i)=>(<div key={d} className={`py-2 text-center text-sm font-black bg-white ${i===6?'text-red-500':i===5?'text-blue-500':'text-slate-700'}`}>{d}</div>))}
@@ -238,7 +227,11 @@
             </div>
           </div>
 
-          {/* 1차 모달: 일일 리스트 보기 */}
+          {/* ==============================================================
+              모달 시스템 영역 
+          ============================================================== */}
+
+          {/* 1차: 달력 클릭 시 뜨는 해당일 리스트 */}
           <Modal isOpen={dailyModal.isOpen} onClose={()=>setDailyModal({...dailyModal, isOpen:false})} title={`📅 ${dailyModal.dateStr} 일정`}>
             {dailyModal.events.length === 0 ? <div className="text-center p-8 text-slate-400 font-bold">등록된 일정이 없습니다.</div> : (
               <div className="space-y-2">
@@ -248,14 +241,14 @@
                   if (ev.type === 'sales') {
                     const bg = isCancel ? "bg-slate-100 text-slate-500" : (isDone ? "bg-blue-50 border-blue-200" : "bg-yellow-50 border-amber-300 hover:bg-yellow-100");
                     return (
-                      <div key={idx} onClick={() => handleEventClick(ev)} className={`p-3 rounded-xl border cursor-pointer transition shadow-sm ${bg}`}>
+                      <div key={idx} onClick={() => { setDailyModal({...dailyModal, isOpen:false}); setSalesModal({isOpen:true, data:ev}); }} className={`p-3 rounded-xl border cursor-pointer transition shadow-sm ${bg}`}>
                         <div className="font-black text-[13px] mb-1" style={{textDecoration: isCancel ? "line-through" : "none"}}>🟡 [영업] {ev.sub} - {ev.title} <span className="float-right text-[11px] bg-white/50 px-1.5 rounded">{ev.status}</span></div>
                         <div className="text-[11px] font-bold opacity-70 whitespace-pre-wrap">{clean(ev.raw.비고메모) || '메모 없음'}</div>
                       </div>
                     );
                   } else {
                     return (
-                      <div key={idx} onClick={() => handleEventClick(ev)} className="p-3 rounded-xl border border-emerald-700 bg-emerald-600 text-white cursor-pointer hover:bg-emerald-700 transition shadow-sm">
+                      <div key={idx} onClick={() => { setDailyModal({...dailyModal, isOpen:false}); setSchModal({isOpen:true, data:ev}); }} className="p-3 rounded-xl border border-emerald-700 bg-emerald-600 text-white cursor-pointer hover:bg-emerald-700 transition shadow-sm">
                         <div className="font-black text-[13px] mb-1">🟢 [안치] {ev.title} <span className="float-right text-[11px] bg-black/20 px-1.5 rounded">{ev.sub}</span></div>
                         <div className="text-[11px] font-medium opacity-90 whitespace-pre-wrap">{clean(ev.raw.비고) || '특이사항 없음'}</div>
                       </div>
@@ -265,53 +258,140 @@
               </div>
             )}
             <div className="mt-4 flex gap-2">
-                <button className="flex-1 py-2.5 bg-blue-600 text-white font-bold rounded-xl text-sm shadow-sm hover:bg-blue-700 transition">+ 영업 등록</button>
-                <button className="flex-1 py-2.5 bg-emerald-600 text-white font-bold rounded-xl text-sm shadow-sm hover:bg-emerald-700 transition">+ 안치 등록</button>
+                <button onClick={() => { setDailyModal({...dailyModal, isOpen:false}); setSalesModal({isOpen:true, data:null}); }} className="flex-1 py-3 bg-amber-50 text-amber-700 border border-amber-200 font-bold rounded-xl text-sm shadow-sm hover:bg-amber-100 transition">+ 영업 등록</button>
+                <button onClick={() => { setDailyModal({...dailyModal, isOpen:false}); setSchModal({isOpen:true, data:null}); }} className="flex-1 py-3 bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold rounded-xl text-sm shadow-sm hover:bg-emerald-100 transition">+ 안치 등록</button>
             </div>
           </Modal>
 
-          {/* 2차 모달: 상세 폼 (CRUD) - Nested Modal */}
-          <Modal isOpen={editModal.isOpen} onClose={()=>setEditModal({...editModal, isOpen:false})} title="✏️ 데이터 수정" isNested={true}>
-            {editModal.data && (
-               <div className="space-y-4">
-                  <div>
-                    <label className="form-label">고객/고인명</label>
-                    <input type="text" className="form-input" defaultValue={editModal.data.title} />
-                  </div>
-                  <div>
-                    <label className="form-label">관련 정보 (위치/영업자)</label>
-                    <input type="text" className="form-input" defaultValue={editModal.data.sub} />
-                  </div>
-                  {editModal.data.type === 'sales' && (
-                    <div>
-                      <label className="form-label">진행 상태</label>
-                      <select className="form-input" defaultValue={editModal.data.status}>
-                        <option>상담 후 대기</option>
-                        <option>답사대기</option>
-                        <option>답사완료</option>
-                        <option>안치확정</option>
-                        <option>취소</option>
-                      </select>
-                    </div>
-                  )}
-                  <div>
-                    <label className="form-label">비고 메모</label>
-                    <textarea className="form-input min-h-[100px]" defaultValue={clean(editModal.data.raw.비고 || editModal.data.raw.비고메모)}></textarea>
-                  </div>
-                  
-                  <div className="flex gap-2 pt-2">
-                    <button className="flex-1 py-3 bg-rose-100 text-rose-600 font-black rounded-xl text-sm hover:bg-rose-200 transition">삭제</button>
-                    <button className="flex-[2] py-3 bg-slate-800 text-white font-black rounded-xl text-sm hover:bg-slate-700 transition shadow-lg">저장하기</button>
-                  </div>
-               </div>
-            )}
+          {/* 1차: 영업 대기 및 선점 명단 리스트 모달 */}
+          <Modal isOpen={undecidedModalOpen} onClose={()=>setUndecidedModalOpen(false)} title="📍 영업 대기 및 선점 명단">
+              <div className="space-y-2 max-h-[60vh] overflow-y-auto no-scrollbar">
+                  {undecidedList.map(ev => (
+                      <div key={ev.id} onClick={() => { setUndecidedModalOpen(false); setSalesModal({isOpen:true, data:ev}); }} className="p-3 bg-white border border-orange-200 rounded-xl cursor-pointer hover:bg-orange-50 shadow-sm transition">
+                          <div className="flex justify-between items-center mb-1.5">
+                              <span className="font-black text-[14px] text-slate-800">{ev.title} <span className="text-slate-500 font-bold text-[12px]">({ev.sub})</span></span>
+                              <span className="text-[10px] font-black text-orange-600 bg-orange-100 px-2 py-0.5 rounded">{ev.status}</span>
+                          </div>
+                          <div className="text-[12px] font-bold text-blue-600 mb-1">📞 {ev.raw?.연락처 || '연락처 없음'}</div>
+                          <div className="text-[11px] text-slate-500 font-bold">⏰ 찜 등록: {normalizeDate(ev.raw?.등록일) || '-'}</div>
+                      </div>
+                  ))}
+                  {undecidedList.length === 0 && <div className="text-center p-5 text-slate-400 font-bold">대기 중인 선점 건이 없습니다.</div>}
+              </div>
           </Modal>
+
+          {/* 2차: 영업 현황 등록/수정 폼 */}
+          <Modal isOpen={salesModal.isOpen} onClose={()=>setSalesModal({isOpen:false, data:null})} title={salesModal.data ? "🟡 영업 현황 수정" : "📝 영업 현황 신규 등록"} isNested={true}>
+              <div className="space-y-4">
+                  <div className="input-group">
+                      <label className="form-label">등록(찜) 일시</label>
+                      <input type="text" className="form-input bg-yellow-50 border-yellow-300 text-red-600" defaultValue={normalizeDate(salesModal.data?.raw?.등록일) || ''} placeholder="비워두면 현재 시간으로 자동 기록됩니다" />
+                  </div>
+                  <div className="input-group">
+                      <label className="form-label">답사 예정일</label>
+                      <input type="date" className="form-input" defaultValue={normalizeDate(salesModal.data?.raw?.답사일) || ''} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                      <div>
+                          <label className="form-label">사명 (업체명)</label>
+                          <input type="text" className="form-input" defaultValue={clean(salesModal.data?.raw?.영업자사명) || ''} placeholder="예: 개인" />
+                      </div>
+                      <div>
+                          <label className="form-label">영업자 성함</label>
+                          <input type="text" className="form-input" defaultValue={clean(salesModal.data?.raw?.영업자성함) || ''} />
+                      </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                      <div>
+                          <label className="form-label">고객(고인)명</label>
+                          <input type="text" className="form-input" defaultValue={salesModal.data?.title || ''} />
+                      </div>
+                      <div>
+                          <label className="form-label">연락처</label>
+                          <input type="text" className="form-input" defaultValue={clean(salesModal.data?.raw?.연락처) || ''} />
+                      </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                      <div>
+                          <label className="form-label">계약구분</label>
+                          <select className="form-input" defaultValue={clean(salesModal.data?.raw?.계약구분) || '선분양'}>
+                              <option value="선분양">선분양</option>
+                              <option value="장례안치">장례안치</option>
+                          </select>
+                      </div>
+                      <div>
+                          <label className="form-label">진행상태</label>
+                          <select className="form-input cursor-pointer font-black text-blue-600" defaultValue={clean(salesModal.data?.status) || '상담 후 대기'}>
+                              <option value="상담 후 대기">상담 후 대기</option>
+                              <option value="답사대기">답사대기</option>
+                              <option value="답사완료">답사완료</option>
+                              <option value="안치확정" className="text-red-500">안치확정</option>
+                              <option value="취소">취소</option>
+                          </select>
+                      </div>
+                  </div>
+                  <div className="input-group">
+                      <label className="form-label text-red-500">🚨 안치 확정일 (안치일정 자동 생성용)</label>
+                      <input type="date" className="form-input border-red-200 bg-red-50" defaultValue={normalizeDate(salesModal.data?.raw?.안치확정일) || ''} />
+                  </div>
+                  <div className="input-group">
+                      <label className="form-label">비고 메모</label>
+                      <textarea className="form-input min-h-[80px]" defaultValue={clean(salesModal.data?.raw?.비고 || salesModal.data?.raw?.비고메모)} placeholder="특이사항..."></textarea>
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                      {salesModal.data && <button className="flex-1 py-3 bg-red-50 text-red-600 font-black rounded-xl text-sm border border-red-100 hover:bg-red-100 transition">삭제 (보관)</button>}
+                      <button className="flex-[2] py-3 bg-blue-600 text-white font-black rounded-xl text-sm hover:bg-blue-700 transition shadow-lg shadow-blue-500/30">데이터 저장</button>
+                  </div>
+              </div>
+          </Modal>
+
+          {/* 2차: 안치 일정 등록/수정 폼 */}
+          <Modal isOpen={schModal.isOpen} onClose={()=>setSchModal({isOpen:false, data:null})} title={schModal.data ? "🟢 안치 일정 수정" : "🟢 안치 일정 등록"} isNested={true}>
+              <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                      <div>
+                          <label className="form-label">안치일</label>
+                          <input type="date" className="form-input" defaultValue={normalizeDate(schModal.data?.raw?.안치일) || ''} />
+                      </div>
+                      <div>
+                          <label className="form-label">계약번호</label>
+                          <input type="text" className="form-input" defaultValue={clean(schModal.data?.raw?.계약번호) || ''} placeholder="실적용" />
+                      </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                      <div>
+                          <label className="form-label">고인명</label>
+                          <input type="text" className="form-input" defaultValue={clean(schModal.data?.raw?.고인명) || ''} />
+                      </div>
+                      <div>
+                          <label className="form-label">계약자</label>
+                          <input type="text" className="form-input" defaultValue={clean(schModal.data?.raw?.계약자) || ''} />
+                      </div>
+                  </div>
+                  <div className="input-group">
+                      <label className="form-label text-blue-600">위치정보 (지도 전송용)</label>
+                      <input type="text" className="form-input border-blue-200 bg-blue-50" defaultValue={clean(schModal.data?.raw?.위치) || ''} placeholder="예: B6/가/반송/4-9[1]" />
+                  </div>
+                  <div className="input-group">
+                      <label className="form-label">비고</label>
+                      <textarea className="form-input min-h-[80px]" defaultValue={clean(schModal.data?.raw?.비고)} placeholder="특이사항..."></textarea>
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                      <button className="flex-1 py-3 bg-slate-800 text-white font-black rounded-xl text-sm shadow-md hover:bg-slate-700 transition">🚀 현장 지도로 전송</button>
+                  </div>
+                  <div className="flex gap-2 mt-2">
+                      {schModal.data && <button className="flex-1 py-3 bg-red-50 text-red-600 font-black rounded-xl text-sm border border-red-100 hover:bg-red-100 transition">삭제</button>}
+                      <button className="flex-[2] py-3 bg-emerald-600 text-white font-black rounded-xl text-sm hover:bg-emerald-700 transition shadow-lg shadow-emerald-500/30">데이터 저장</button>
+                  </div>
+              </div>
+          </Modal>
+
         </div>
       );
     }
 
     // ==========================================
-    // 🔍 View: Field Map (JSON Fetch + CRUD Modal)
+    // 🔍 View: Field Map (JSON Fetch + Field CRUD)
     // ==========================================
     function FieldView() {
       const [loading, setLoading] = useState(true);
@@ -383,7 +463,6 @@
 
       return (
         <div className="space-y-4 max-w-7xl mx-auto flex flex-col h-[calc(100vh-100px)] overflow-hidden">
-          {/* ✅ 터치 스크롤 네비게이션 */}
           <div className="flex gap-2 overflow-x-auto pb-2 border-b border-slate-200 px-2 w-full no-scrollbar shrink-0" style={{ WebkitOverflowScrolling: 'touch' }}>
             {SECTION_LIST.map(s => (
               <button key={s} onClick={() => setArea(s)} className={`flex-none px-4 py-2.5 rounded-t-xl font-bold text-[13px] whitespace-nowrap transition-all border-t border-l border-r ${area === s ? 'bg-white text-blue-600 border-slate-200 translate-y-[1px] shadow-[0_-2px_4px_rgba(0,0,0,0.02)]' : 'bg-slate-100 text-slate-500 border-transparent hover:bg-slate-200'}`}>
@@ -427,6 +506,7 @@
                   </div>
                   <div className="pl-4 w-32">
                     <label className="form-label">현재 상태</label>
+                    {/* 현장 모달에서 '계약금'을 삭제하고 4가지만 노출 */}
                     <select className="form-input bg-white text-blue-600 font-black cursor-pointer" defaultValue={clean(slotModal.data.계약_상태) || '미분양'}>
                       <option value="미분양">미분양</option>
                       <option value="예약">예약</option>
@@ -437,38 +517,38 @@
                 </div>
                 
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-white p-3 rounded-xl border border-slate-200">
+                  <div>
                     <label className="form-label">계약자</label>
-                    <input type="text" className="form-input bg-slate-50" defaultValue={clean(slotModal.data.계약자)} />
+                    <input type="text" className="form-input" defaultValue={clean(slotModal.data.계약자)} />
                   </div>
-                  <div className="bg-white p-3 rounded-xl border border-slate-200">
+                  <div>
                     <label className="form-label">기수</label>
                     <div className="relative">
-                       <input type="number" className="form-input bg-slate-50 pr-8" defaultValue={clean(slotModal.data.기수)} />
+                       <input type="number" className="form-input pr-8" defaultValue={clean(slotModal.data.기수)} />
                        <span className="absolute right-3 top-1/2 -translate-y-1/2 font-black text-slate-400">기</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-white p-3 rounded-xl border border-slate-200">
+                  <div>
                     <label className="form-label text-amber-600">분양가</label>
-                    <input type="text" className="form-input bg-amber-50 text-amber-700" defaultValue={formatMoney(slotModal.data.가격)} />
+                    <input type="text" className="form-input bg-amber-50 border-amber-200 text-amber-700" defaultValue={formatMoney(slotModal.data.가격)} />
                   </div>
-                  <div className="bg-white p-3 rounded-xl border border-slate-200">
+                  <div>
                     <label className="form-label text-amber-600">관리비 (연)</label>
-                    <input type="text" className="form-input bg-amber-50 text-amber-700" defaultValue={formatMoney(slotModal.data.관리비)} />
+                    <input type="text" className="form-input bg-amber-50 border-amber-200 text-amber-700" defaultValue={formatMoney(slotModal.data.관리비)} />
                   </div>
                 </div>
 
-                <div className="bg-white p-3 rounded-xl border border-slate-200">
+                <div>
                   <label className="form-label">비고 (현장 메모)</label>
-                  <textarea className="form-input bg-slate-50 min-h-[80px]" defaultValue={clean(slotModal.data.메모)} placeholder="특이사항 기록..."></textarea>
+                  <textarea className="form-input min-h-[80px]" defaultValue={clean(slotModal.data.메모)} placeholder="특이사항 기록..."></textarea>
                 </div>
 
                 <div className="pt-2">
                     <button className="w-full py-3 bg-blue-600 text-white font-black rounded-xl text-sm hover:bg-blue-700 transition shadow-lg shadow-blue-500/30">
-                        데이터 저장 (DB 동기화)
+                        지도 데이터 저장 (DB 동기화)
                     </button>
                 </div>
               </div>
@@ -479,14 +559,12 @@
     }
 
     // ==========================================
-    // ⚙️ Main Application Controller (PC Sidebar Toggle 탑재)
+    // ⚙️ Main Application Controller (PC Sidebar)
     // ==========================================
     function App() {
       const [activeTab, setActiveTab] = useState('dash');
-      // 모바일은 기본 닫힘, PC는 기본 열림 상태로 시작
       const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 1024);
 
-      // 창 크기 변경 시 사이드바 자동 조절
       useEffect(() => {
         const handleResize = () => {
           if (window.innerWidth > 1024) setIsSidebarOpen(true);
@@ -498,12 +576,11 @@
 
       return (
         <div className="flex h-screen overflow-hidden bg-slate-900">
-          {/* 모바일 백그라운드 딤 처리 */}
           {isSidebarOpen && <div className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-sm transition-opacity" onClick={() => setIsSidebarOpen(false)} />}
           
           <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 border-r border-slate-800 text-slate-300 transform transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:hidden'} flex flex-col shadow-2xl lg:shadow-none`}>
             <div className="p-6 border-b border-slate-800 flex justify-between items-center shrink-0">
-              <h1 className="text-xl font-black text-white tracking-tighter">JAKE WorkOS <span className="text-[10px] bg-emerald-500 px-1.5 py-0.5 rounded ml-1 text-slate-900">V19</span></h1>
+              <h1 className="text-xl font-black text-white tracking-tighter">JAKE WorkOS <span className="text-[10px] bg-emerald-500 px-1.5 py-0.5 rounded ml-1 text-slate-900">V20</span></h1>
               <button className="lg:hidden text-slate-400 hover:text-white transition font-bold" onClick={() => setIsSidebarOpen(false)}>✕</button>
             </div>
             <nav className="p-4 space-y-8 overflow-y-auto flex-1 no-scrollbar">
@@ -528,7 +605,6 @@
           <main className="flex-1 flex flex-col h-screen overflow-hidden bg-[#F8FAFC]">
             <header className="h-14 bg-white border-b border-slate-200 flex items-center px-4 justify-between shrink-0 z-10 shadow-sm">
               <div className="flex items-center">
-                {/* 햄버거/토글 버튼 */}
                 <button className="p-2 text-slate-500 hover:bg-slate-100 transition rounded-lg mr-3" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
                 </button>
