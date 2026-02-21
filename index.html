@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Jake WorkOS - V6 (Integrated)</title>
+  <title>Jake WorkOS - V7 (Final Sync)</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -14,26 +14,37 @@
     body { font-family: 'Pretendard', sans-serif; background-color: #f8fafc; overscroll-behavior-y: none; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .calendar-cell { min-height: 120px; transition: all 0.2s; }
+    .calendar-cell:hover { background-color: #f1f5f9; }
   </style>
 </head>
 <body>
   <div id="root"></div>
+
   <script type="text/babel">
     const { useState, useEffect, useMemo } = React;
+
     const SUPABASE_URL = 'https://lqccxnciiajwqdmpwjdv.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxY2N4bmNpaWFqd3FkbXB3amR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MjA3MTMsImV4cCI6MjA4NzA5NjcxM30.L23-eq-DIPsbONOeX-xQ8UcMb7gtgTTTRpkaSm9HTw4';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // 🛡️ 날짜 정규화 유틸리티
-    const normalizeDate = (dateInput) => {
-      if (!dateInput) return null;
-      try {
-        const cleaned = String(dateInput).replace(/\s/g, '').replace(/\./g, '-');
-        const d = new Date(cleaned);
-        return isNaN(d.getTime()) ? null : d.toISOString().split('T')[0];
-      } catch { return null; }
+    // ==========================================
+    // 🛡️ 날짜 정규화 엔진 (문자열 강제 매칭 방식)
+    // ==========================================
+    const toDateString = (val) => {
+      if (!val) return null;
+      // 어떤 형식이든 숫자만 추출 (예: 2026.02.21 -> 20260221)
+      const cleaned = String(val).replace(/[^0-9]/g, '');
+      if (cleaned.length < 8) return null;
+      const y = cleaned.substring(0, 4);
+      const m = cleaned.substring(4, 6).padStart(2, '0');
+      const d = cleaned.substring(6, 8).padStart(2, '0');
+      return `${y}-${m}-${d}`;
     };
 
+    // ==========================================
+    // 🧩 공통 컴포넌트: Layout
+    // ==========================================
     function Layout({ activeTab, setActiveTab, children }) {
       const [isSidebarOpen, setIsSidebarOpen] = useState(false);
       const navItems = [
@@ -42,91 +53,115 @@
         { id: 'engraving', icon: '⚰️', label: '각인 관리' },
         { id: 'project', icon: '🚀', label: '프로젝트 (WorkOS)' }
       ];
+
       return (
         <div className="flex h-screen overflow-hidden text-slate-800">
           {isSidebarOpen && <div className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden" onClick={() => setIsSidebarOpen(false)} />}
-          <aside className={`fixed md:static inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 transform transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} flex flex-col`}>
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h1 className="font-bold text-xl text-slate-800 tracking-tight">🌲 Jake WorkOS</h1>
-              <button className="md:hidden text-slate-500 font-bold text-xl" onClick={() => setIsSidebarOpen(false)}>✕</button>
+          <aside className={`fixed md:static inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 transform transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} flex flex-col shadow-xl md:shadow-none`}>
+            <div className="p-6 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+              <h1 className="font-black text-xl text-blue-600 tracking-tighter">Jake WorkOS</h1>
+              <button className="md:hidden text-slate-400" onClick={() => setIsSidebarOpen(false)}>✕</button>
             </div>
-            <nav className="p-4 space-y-2 flex-1 overflow-y-auto no-scrollbar">
+            <nav className="p-4 space-y-1.5 flex-1 overflow-y-auto no-scrollbar">
               {navItems.map(item => (
-                <button key={item.id} onClick={() => { setActiveTab(item.id); setIsSidebarOpen(false); }} className={`w-full text-left p-3 rounded-lg font-bold transition shadow-sm ${activeTab === item.id ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100 bg-white border border-transparent'}`}>
-                  {item.icon} {item.label}
+                <button
+                  key={item.id}
+                  onClick={() => { setActiveTab(item.id); setIsSidebarOpen(false); }}
+                  className={`w-full text-left p-3.5 rounded-xl font-bold transition-all duration-200 ${
+                    activeTab === item.id 
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 scale-[1.02]' 
+                      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                >
+                  <span className="mr-3">{item.icon}</span>{item.label}
                 </button>
               ))}
             </nav>
           </aside>
-          <main className="flex-1 flex flex-col h-screen overflow-hidden bg-slate-50">
-            <header className="h-14 bg-white border-b border-slate-200 flex items-center px-4 shrink-0 shadow-sm z-10 justify-between">
+
+          <main className="flex-1 flex flex-col h-screen overflow-hidden bg-[#F1F5F9]">
+            <header className="h-16 bg-white border-b border-slate-200 flex items-center px-6 shrink-0 z-10 justify-between shadow-sm">
               <div className="flex items-center">
-                <button className="md:hidden p-2 text-slate-600 rounded-md bg-gray-100 mr-3" onClick={() => setIsSidebarOpen(true)}>☰</button>
-                <div className="font-bold text-lg text-slate-700">{navItems.find(i => i.id === activeTab)?.label}</div>
+                <button className="md:hidden p-2 text-slate-600 rounded-lg bg-slate-100 mr-4" onClick={() => setIsSidebarOpen(true)}>☰</button>
+                <div className="font-black text-xl text-slate-800">{navItems.find(i => i.id === activeTab)?.label}</div>
               </div>
+              <div className="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1.5 rounded-full">SYSTEM ACTIVE</div>
             </header>
-            <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-24 no-scrollbar">{children}</div>
+            <div className="flex-1 overflow-y-auto p-4 md:p-8 no-scrollbar">{children}</div>
           </main>
         </div>
       );
     }
 
+    // ==========================================
+    // 📊 탭 1: Dashboard (달력 고도화)
+    // ==========================================
     function DashboardView() {
       const [loading, setLoading] = useState(true);
       const [dataList, setDataList] = useState([]);
       const [currentDate, setCurrentDate] = useState(new Date());
 
       useEffect(() => {
-        const fetchData = async () => {
+        const load = async () => {
           setLoading(true);
-          const { data } = await supabaseClient.from('view_master_dashboard').select('*').not('실제_안치일정', 'is', null);
-          const normalized = (data || []).map(row => ({ 
-            ...row, 
-            cleanDate: normalizeDate(row.실제_안치일정) 
-          })).filter(row => row.cleanDate !== null);
-          setDataList(normalized);
-          setLoading(false);
+          try {
+            const { data, error } = await supabaseClient
+              .from('view_master_dashboard')
+              .select('*');
+            if (error) throw error;
+            
+            // 데이터를 가져올 때 날짜를 미리 정규화
+            const processed = (data || []).map(row => ({
+              ...row,
+              matchKey: toDateString(row.실제_안치일정)
+            })).filter(row => row.matchKey !== null);
+            
+            setDataList(processed);
+          } catch (e) { console.error(e); }
+          finally { setLoading(false); }
         };
-        fetchData();
+        load();
       }, []);
 
       const calendarDays = useMemo(() => {
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth();
         const firstDay = new Date(year, month, 1).getDay();
-        const startOffset = firstDay === 0 ? 6 : firstDay - 1;
+        const startOffset = firstDay === 0 ? 6 : firstDay - 1; 
         const lastDate = new Date(year, month + 1, 0).getDate();
+        
         const days = [];
         for (let i = 0; i < startOffset; i++) days.push(null);
         for (let i = 1; i <= lastDate; i++) {
           const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-          const dayEvents = dataList.filter(row => row.cleanDate === dateStr);
-          days.push({ day: i, dateStr, events: dayEvents });
+          const events = dataList.filter(row => row.matchKey === dateStr);
+          days.push({ day: i, dateStr, events });
         }
         return days;
       }, [currentDate, dataList]);
 
       return (
-        <div className="space-y-6 animate-in fade-in duration-500">
-          <div className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-2 border rounded bg-white font-bold hover:bg-gray-100 transition">◀</button>
-              <h2 className="font-black text-xl text-slate-800">{currentDate.getFullYear()}년 {currentDate.getMonth() + 1}월</h2>
-              <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-2 border rounded bg-white font-bold hover:bg-gray-100 transition">▶</button>
+        <div className="max-w-6xl mx-auto space-y-6">
+          <div className="bg-white rounded-2xl shadow-xl shadow-slate-200 border border-slate-100 overflow-hidden">
+            <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-white">
+              <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-2.5 hover:bg-slate-100 rounded-full transition">◀</button>
+              <h2 className="font-black text-2xl text-slate-800">{currentDate.getFullYear()}년 {currentDate.getMonth() + 1}월</h2>
+              <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-2.5 hover:bg-slate-100 rounded-full transition">▶</button>
             </div>
-            <div className="grid grid-cols-7 gap-px bg-slate-200">
-              {['월', '화', '수', '목', '금', '토', '일'].map((d, idx) => (
-                <div key={d} className={`p-2 text-center text-xs font-bold bg-slate-50 ${idx === 6 ? 'text-red-500' : idx === 5 ? 'text-blue-500' : 'text-slate-500'}`}>{d}</div>
+            
+            <div className="grid grid-cols-7 gap-px bg-slate-100">
+              {['월', '화', '수', '목', '금', '토', '일'].map((d, i) => (
+                <div key={d} className={`p-4 text-center text-sm font-black bg-slate-50 ${i === 6 ? 'text-red-500' : i === 5 ? 'text-blue-500' : 'text-slate-400'}`}>{d}</div>
               ))}
               {calendarDays.map((d, i) => (
-                <div key={i} className={`bg-white min-h-[120px] p-1 border-t border-l border-slate-100 ${!d ? 'bg-gray-50' : ''}`}>
+                <div key={i} className={`calendar-cell bg-white p-2 border-t border-slate-50 ${!d ? 'bg-slate-50/50' : ''}`}>
                   {d && (
                     <>
-                      <div className="text-right text-[10px] font-bold text-slate-400 mb-1">{d.day}</div>
-                      <div className="space-y-1 overflow-y-auto max-h-[90px] no-scrollbar">
+                      <div className={`text-right text-xs font-bold mb-2 ${new Date().toISOString().split('T')[0] === d.dateStr ? 'text-blue-600 underline decoration-2' : 'text-slate-300'}`}>{d.day}</div>
+                      <div className="space-y-1.5 overflow-y-auto no-scrollbar max-h-[85px]">
                         {d.events.map((ev, idx) => (
-                          <div key={idx} className="text-[10px] bg-green-600 text-white p-1 rounded shadow-sm font-bold truncate leading-tight">
-                            {ev.마스터_고인명 || ev.마스터_계약자 || '미상'} ({ev.안치번호?.split('/').pop()})
+                          <div key={idx} className="text-[10px] sm:text-[11px] bg-emerald-500 text-white px-2 py-1.5 rounded-lg font-bold shadow-sm border border-emerald-600 truncate leading-none">
+                            {ev.마스터_고인명 || ev.마스터_계약자} <span className="opacity-75 font-normal">({ev.안치번호?.split('/').pop()})</span>
                           </div>
                         ))}
                       </div>
@@ -140,41 +175,66 @@
       );
     }
 
-    // 🔍 탭 2: 현장 관리 (Grid) - 기초 이식
+    // ==========================================
+    // 🔍 탭 2: Field Map (Grid Slot)
+    // ==========================================
     function FieldView() {
       const [loading, setLoading] = useState(true);
       const [slots, setSlots] = useState([]);
-      const [area, setArea] = useState('A6');
+      const [selectedArea, setSelectedArea] = useState('A6');
 
       useEffect(() => {
-        const fetchField = async () => {
+        const fetch = async () => {
           setLoading(true);
-          const { data } = await supabaseClient.from('official_records').select('안치번호, 계약현황, 고인명, 계약자1').like('안치번호', `${area}%`).order('안치번호', { ascending: true });
+          const { data } = await supabaseClient
+            .from('official_records')
+            .select('안치번호, 계약현황, 고인명, 계약자1')
+            .like('안치번호', `${selectedArea}%`)
+            .order('안치번호', { ascending: true });
           setSlots(data || []);
           setLoading(false);
         };
-        fetchField();
-      }, [area]);
+        fetch();
+      }, [selectedArea]);
 
       return (
-        <div className="space-y-4 animate-in slide-in-from-bottom-2 duration-500">
-          <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-            {['A4', 'A5', 'A6', 'B2', 'B5'].map(a => (
-              <button key={a} onClick={() => setArea(a)} className={`px-4 py-2 rounded-full font-bold text-xs shadow-sm transition ${area === a ? 'bg-slate-800 text-white' : 'bg-white border text-slate-500 hover:bg-gray-50'}`}>{a} 구역</button>
+        <div className="max-w-6xl mx-auto space-y-6">
+          <div className="flex gap-2 overflow-x-auto pb-3 no-scrollbar shrink-0">
+            {['A4', 'A5', 'A6', 'B2', 'B5'].map(area => (
+              <button 
+                key={area}
+                onClick={() => setSelectedArea(area)}
+                className={`px-6 py-3 rounded-2xl font-black text-sm transition-all duration-200 shadow-sm border ${
+                  selectedArea === area ? 'bg-slate-800 text-white border-slate-800 scale-105' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
+                }`}
+              >
+                {area} 구역
+              </button>
             ))}
           </div>
-          <div className="bg-white p-4 rounded-xl border border-slate-200 min-h-[400px]">
-            {loading ? <div className="p-20 text-center animate-pulse font-bold text-slate-400">현장 맵 데이터를 로딩 중...</div> : (
-              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-10 lg:grid-cols-12 gap-2">
-                {slots.map((s, idx) => (
-                  <div key={idx} className={`aspect-square rounded border flex flex-col items-center justify-center p-1 text-[8px] font-bold shadow-sm transition-all hover:scale-105 cursor-pointer ${
-                    s.계약현황 === '장례' ? 'bg-green-100 border-green-300 text-green-800' : 
-                    s.계약현황 === '선분양' ? 'bg-blue-100 border-blue-300 text-blue-800' : 'bg-slate-50 border-slate-200 text-slate-400'
-                  }`}>
-                    <div className="opacity-50">{s.안치번호?.split('/').pop()}</div>
-                    <div className="truncate w-full text-center mt-1">{s.고인명 || s.계약자1 || '-'}</div>
-                  </div>
-                ))}
+
+          <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200 border border-slate-100">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center h-64 space-y-4">
+                <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                <div className="font-bold text-slate-400 italic">MAP SYNCHRONIZING...</div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-10 lg:grid-cols-12 gap-3">
+                {slots.map((slot, i) => {
+                  const statusColor = slot.계약현황 === '장례' ? 'bg-emerald-100 border-emerald-200 text-emerald-700' :
+                                    slot.계약현황 === '선분양' ? 'bg-blue-100 border-blue-200 text-blue-700' :
+                                    'bg-slate-50 border-slate-100 text-slate-300';
+                  return (
+                    <div 
+                      key={i} 
+                      className={`aspect-square rounded-xl border-2 flex flex-col items-center justify-center p-2 transition-all hover:scale-110 cursor-pointer shadow-sm ${statusColor}`}
+                    >
+                      <div className="text-[9px] opacity-60 mb-1">{slot.안치번호.split('/').pop()}</div>
+                      <div className="text-[11px] font-black truncate w-full text-center">{slot.고인명 || slot.계약자1 || ''}</div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -182,17 +242,21 @@
       );
     }
 
+    // ==========================================
+    // ⚙️ App Root
+    // ==========================================
     function App() {
       const [activeTab, setActiveTab] = useState('dashboard');
       return (
         <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
           {activeTab === 'dashboard' && <DashboardView />}
           {activeTab === 'field' && <FieldView />}
-          {activeTab === 'engraving' && <div className="p-20 text-center text-slate-400 font-bold">🚧 각인 관리 모듈 준비 중</div>}
-          {activeTab === 'project' && <div className="p-20 text-center text-slate-400 font-bold">🚧 WorkOS 프로젝트 모듈 준비 중</div>}
+          {activeTab === 'engraving' && <div className="p-20 text-center font-black text-slate-300 italic">ENGRAVING MODULE READY</div>}
+          {activeTab === 'project' && <div className="p-20 text-center font-black text-slate-300 italic">WORKOS MODULE READY</div>}
         </Layout>
       );
     }
+
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<App />);
   </script>
