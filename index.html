@@ -1,42 +1,20 @@
-const fetchData = async () => {
-        setLoading(true);
-        try {
-          // 1. 실제_안치일정이 비어있지 않은 모든 데이터를 일단 가져옵니다.
-          const { data, error } = await supabaseClient
-            .from('view_master_dashboard')
-            .select('*')
-            .not('실제_안치일정', 'is', null);
+DROP VIEW IF EXISTS "view_master_dashboard";
 
-          if (error) throw error;
-          
-          // 2. 가져온 데이터 중 유효한 날짜 형식을 가진 것만 정리합니다.
-          const validData = (data || []).map(item => ({
-            ...item,
-            normDate: formatDate(item.실제_안치일정) // YYYY-MM-DD 형식으로 통일
-          })).filter(item => item.normDate !== null);
-
-          setDataList(validData);
-        } catch (error) { 
-          console.error("데이터 매핑 에러:", error); 
-        } finally { 
-          setLoading(false); 
-        }
-      };
-
-      const calendarDays = useMemo(() => {
-        const year = currentDate.getFullYear();
-        const month = currentDate.getMonth();
-        const firstDay = new Date(year, month, 1).getDay();
-        const startOffset = firstDay === 0 ? 6 : firstDay - 1; 
-        const lastDate = new Date(year, month + 1, 0).getDate();
-        
-        const days = [];
-        for (let i = 0; i < startOffset; i++) days.push(null);
-        for (let i = 1; i <= lastDate; i++) {
-          const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-          // 3. 통일된 날짜(normDate)와 달력의 날짜(dateStr)를 비교합니다.
-          const dayEvents = dataList.filter(row => row.normDate === dateStr);
-          days.push({ day: i, dateStr, events: dayEvents });
-        }
-        return days;
-      }, [currentDate, dataList]);
+CREATE VIEW "view_master_dashboard" AS
+SELECT 
+    o."안치번호",
+    o."증서no" AS "계약번호",
+    o."계약현황",
+    o."계약자1" AS "마스터_계약자",
+    o."고인명" AS "마스터_고인명",
+    o."분양가격",
+    o."미수금",
+    e."상태" AS "각인_진행상태",
+    e."각인" AS "각인_내용",
+    e."설치" AS "각인_설치여부",
+    -- b(일정 테이블)에 데이터가 없으면 o(마스터 테이블)의 안치일자를 가져옵니다.
+    COALESCE(NULLIF(b."안치일", ''), NULLIF(o."관리비납부_안치일자", '')) AS "실제_안치일정",
+    b."비고" AS "안치_비고"
+FROM "official_records" o
+LEFT JOIN "engraving_mgmt" e ON o."증서no" = e."계약번호"
+LEFT JOIN "burial_schedule" b ON o."증서no" = b."계약번호";
