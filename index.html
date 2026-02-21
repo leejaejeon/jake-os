@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Jake WorkOS V12 - Perfect Map Engine</title>
+  <title>Jake WorkOS V13 - Absolute Map Sync</title>
   
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -15,7 +15,7 @@
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
     body { font-family: 'Pretendard', sans-serif; background-color: #f1f5f9; color: #1e293b; -webkit-font-smoothing: antialiased; overflow: hidden; }
     
-    /* Z폴드6 / 모바일 가로-세로 스크롤바 디자인 */
+    /* 가로/세로 무한 스크롤 디자인 */
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-track { background: #f8fafc; border-radius: 4px; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; border: 2px solid #f8fafc; }
@@ -28,15 +28,17 @@
     .calendar-cell { min-height: 110px; background-color: #fff; padding: 4px; transition: background 0.2s; cursor: pointer; }
     .calendar-cell:hover { background-color: #f8fafc; }
     
-    /* 모달 애니메이션 */
-    .modal-enter { animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+    .modal-enter { animation: fadeIn 0.2s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-    /* 🗺️ 현실 지도 물리 엔진 (V8 베이스) */
+    /* 🗺️ 현실 지도 물리 엔진 (무보정 순수 출력) */
     .map-row { display: flex; flex-direction: row; justify-content: flex-start; gap: 4px; margin-bottom: 4px; width: max-content; }
     .map-slot { width: 85px; min-width: 85px; height: 70px; border-radius: 6px; border: 1px solid #cbd5e1; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; transition: transform 0.1s, opacity 0.1s; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
     .map-slot:active { transform: scale(0.95); opacity: 0.8; }
-    .slot-spacer { visibility: hidden; pointer-events: none; } /* 투명한 빈 공간 */
+    
+    /* 투명한 빈 공간 (이것이 지도의 모양을 만듭니다) */
+    .slot-spacer { visibility: hidden; pointer-events: none; } 
+    
     .slot-id { font-size: 10px; opacity: 0.8; font-weight: 800; margin-bottom: 2px; }
     .slot-name { font-size: 11px; font-weight: 800; text-align: center; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 2px; letter-spacing: -0.5px; }
   </style>
@@ -47,7 +49,6 @@
   <script type="text/babel">
     const { useState, useEffect, useMemo, useCallback } = React;
 
-    // 🔐 Supabase Configuration
     const SUPABASE_URL = 'https://lqccxnciiajwqdmpwjdv.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxY2N4bmNpaWFqd3FkbXB3amR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MjA3MTMsImV4cCI6MjA4NzA5NjcxM30.L23-eq-DIPsbONOeX-xQ8UcMb7gtgTTTRpkaSm9HTw4';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -55,7 +56,7 @@
     // 🛡️ Data Sanitizer (Zero-Failure)
     const clean = (val) => (!val || val === '0.0' || val === '0' || val === 'null' || val === ' -  - ') ? '' : String(val).trim();
     
-    // 버그 수정: 2026-2-14 처럼 한 자리 수 월/일이 들어와도 완벽하게 YYYY-MM-DD로 변환합니다.
+    // 달력 데이터 실종 방지용 방탄 날짜 엔진
     const normalizeDate = (v) => { 
       if(!v) return null; 
       const s = String(v).replace(/\./g,'-').replace(/\s/g,'').substring(0,10);
@@ -71,7 +72,6 @@
       return isNaN(num) ? '0원' : num.toLocaleString() + '원';
     };
 
-    // 📍 현실 지도 레이아웃 규격 (GAS 원본 복제)
     const SECTION_LIST = ['A2/가','A3/가','A4/가','A4/나','A4/다','A5/가','A5/나','A6/가','A6/나','B1/가','B2/가','B3/가','B4/가','B5/가','B6/가/1-12','B6/가/13-14','C1/가'];
     const ROW_CONFIG = { 
       'A2/가':[12], 'A3/가':[8,8], 'A4/가':[12,12,12,12,18,18,28,12], 'A4/나':[9,11,7,8,8], 'A4/다':[6,6], 'A5/가':[13,14,14,13,13,15,11], 
@@ -102,7 +102,7 @@
     }
 
     // ==========================================
-    // 📊 View: Unified Dashboard (Daily List Modal 이식)
+    // 📊 View: Unified Dashboard 
     // ==========================================
     function DashboardView() {
       const [loading, setLoading] = useState(true);
@@ -127,7 +127,6 @@
               raw: b
             }));
 
-            // Supabase에서 컬럼명이 꼬이는 현상을 방어합니다.
             const salesEvents = (salRes.data || []).map(s => {
               const custName = clean(s['고객(고인)명'] || s.고객_고인_명 || s.고객고인명 || '이름없음');
               return {
@@ -175,7 +174,6 @@
               </div>
             </div>
 
-            {/* Z폴드6 달력 스크롤 최적화 구역 */}
             <div className="flex-1 overflow-x-auto overflow-y-auto no-scrollbar bg-slate-50 p-2 md:p-4">
               <div className="min-w-[700px] h-full flex flex-col shadow-sm rounded-xl overflow-hidden">
                 <div className="grid grid-cols-7 gap-px bg-slate-200 border-b border-slate-200 shrink-0">
@@ -212,7 +210,6 @@
             </div>
           </div>
 
-          {/* 📅 공유앱 이식: Daily List Modal */}
           <Modal isOpen={dailyModal.isOpen} onClose={() => setDailyModal({ ...dailyModal, isOpen: false })} title={`📅 ${dailyModal.date} 일정 상세`}>
             {dailyModal.events.length === 0 ? (
               <div className="text-center p-10 text-slate-400 font-bold">이 날짜에 등록된 일정이 없습니다.</div>
@@ -251,7 +248,7 @@
     }
 
     // ==========================================
-    // 🔍 View: Field Map (🚀 원본 엑셀 기반 1:1 완벽 렌더링 엔진)
+    // 🔍 View: Field Map (🚀 절대 보존 렌더링 엔진)
     // ==========================================
     function FieldView() {
       const [loading, setLoading] = useState(true);
@@ -262,7 +259,7 @@
       useEffect(() => {
         const fetchField = async () => {
           setLoading(true);
-          // 반드시 id 순서대로 가져와야 엑셀 원본의 물리적 위치(SPACER 포함)가 유지됩니다.
+          // ✅ 핵심: 어떤 조작도 하지 않고 DB에 들어있는 'id' 순서 그대로 가져옵니다.
           const res = await supabaseClient.from('field_data').select('*').eq('구역', area).order('id', { ascending: true });
           setData(res.data || []);
           setLoading(false);
@@ -270,7 +267,7 @@
         fetchField();
       }, [area]);
 
-      // 🗺️ ROW_CONFIG에 따라 배열을 자르는 가장 순수하고 완벽한 엔진 (V8.5 방식)
+      // 🗺️ ROW_CONFIG에 따라 무식하게(?) 배열을 자르기만 합니다. (절대 정렬 안 함)
       const renderedRows = useMemo(() => {
         const rows = [];
         let currentIndex = 0;
@@ -290,7 +287,6 @@
 
       return (
         <div className="space-y-4 max-w-7xl mx-auto flex flex-col h-[calc(100vh-100px)]">
-          {/* 네비게이션 */}
           <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar shrink-0 border-b border-slate-200">
             {SECTION_LIST.map(s => (
               <button key={s} onClick={() => setArea(s)} className={`px-4 py-2.5 rounded-t-xl font-bold text-[13px] whitespace-nowrap transition-all border-t border-l border-r ${area === s ? 'bg-white text-slate-900 border-slate-200 border-b-white translate-y-[1px]' : 'bg-slate-100 text-slate-500 border-transparent hover:bg-slate-200'}`}>
@@ -299,20 +295,22 @@
             ))}
           </div>
 
-          {/* 🗺️ 무한 스크롤 캔버스 */}
-          <div className="bg-white p-4 md:p-8 rounded-b-2xl rounded-tr-2xl shadow-xl border border-slate-200 flex-1 overflow-auto">
+          <div className="bg-white p-4 md:p-8 rounded-b-2xl rounded-tr-2xl shadow-xl border border-slate-200 flex-1 overflow-auto relative">
             {loading ? (
               <div className="flex h-full items-center justify-center font-black text-slate-300 animate-pulse tracking-widest text-lg">MAP SYNCHRONIZING...</div>
             ) : renderedRows.length === 0 ? (
-              <div className="flex h-full items-center justify-center font-bold text-slate-400">우선 Supabase에 field_data.csv 를 업데이트 해주세요.</div>
+              <div className="flex flex-col h-full items-center justify-center font-bold text-slate-400">
+                <span className="text-4xl mb-2">⚠️</span>
+                <span>이 구역의 데이터가 DB에 없습니다.</span>
+              </div>
             ) : (
               <div className="w-max mx-auto pb-10 pr-10">
                 {renderedRows.map((row, rIdx) => (
                   <div key={rIdx} className="map-row">
                     {row.map((s, sIdx) => {
-                      // 엑셀에서 넘어온 SPACER(빈칸) 데이터 처리
+                      // ✅ 엑셀에서 넘어온 SPACER(빈칸) 데이터 처리 (투명 박스로 그리기)
                       if (s.위치_번호 === 'SPACER') {
-                        return <div key={sIdx} className="map-slot slot-spacer"></div>;
+                        return <div key={`spacer-${rIdx}-${sIdx}`} className="map-slot slot-spacer"></div>;
                       }
 
                       const status = clean(s.계약_상태) || '미분양';
@@ -324,7 +322,7 @@
                         '미분양': 'bg-white text-slate-400 border-slate-300'
                       };
                       return (
-                        <div key={sIdx} onClick={() => setSlotModal({ isOpen: true, data: s })} className={`map-slot ${colors[status] || colors['미분양']}`}>
+                        <div key={s.id || sIdx} onClick={() => setSlotModal({ isOpen: true, data: s })} className={`map-slot ${colors[status] || colors['미분양']}`}>
                           <div className={`slot-id ${status==='미분양'?'text-slate-400':'text-inherit'}`}>{s.위치_번호}</div>
                           <div className={`slot-name ${status==='미분양'?'opacity-30':'opacity-100'}`}>{clean(s.성함) || clean(s.계약자) || 'EMPTY'}</div>
                         </div>
@@ -336,7 +334,6 @@
             )}
           </div>
 
-          {/* 📝 공유앱 완벽 이식: 현장 슬롯 상세 정보 모달 */}
           <Modal isOpen={slotModal.isOpen} onClose={() => setSlotModal({ isOpen: false, data: null })} title={`🗺️ ${slotModal.data?.구역} ${slotModal.data?.위치_번호}`}>
             {slotModal.data && (
               <div className="space-y-3">
@@ -397,7 +394,7 @@
           {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setIsSidebarOpen(false)} />}
           <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 lg:static lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform shadow-2xl lg:shadow-none`}>
             <div className="p-6 border-b border-slate-800 flex justify-between items-center">
-              <h1 className="text-xl font-black text-white tracking-tighter">JAKE WorkOS <span className="text-xs bg-emerald-600 px-1.5 py-0.5 rounded ml-1 text-white">V12</span></h1>
+              <h1 className="text-xl font-black text-white tracking-tighter">JAKE WorkOS <span className="text-xs bg-emerald-600 px-1.5 py-0.5 rounded ml-1 text-white">V13</span></h1>
               <button className="lg:hidden text-slate-400 font-bold" onClick={() => setIsSidebarOpen(false)}>✕</button>
             </div>
             <nav className="p-4 space-y-8 overflow-y-auto h-[calc(100vh-80px)] no-scrollbar">
