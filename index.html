@@ -3,14 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Jake WorkOS - V3</title>
-  
+  <title>Jake WorkOS - V4</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
   <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
     body { font-family: 'Pretendard', sans-serif; background-color: #f8fafc; overscroll-behavior-y: none; }
@@ -24,14 +22,22 @@
   <script type="text/babel">
     const { useState, useEffect, useMemo } = React;
 
-    // 🔐 Supabase 연동 키
     const SUPABASE_URL = 'https://lqccxnciiajwqdmpwjdv.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxY2N4bmNpaWFqd3FkbXB3amR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MjA3MTMsImV4cCI6MjA4NzA5NjcxM30.L23-eq-DIPsbONOeX-xQ8UcMb7gtgTTTRpkaSm9HTw4';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     // ==========================================
-    // 🧩 공통 컴포넌트: Layout
+    // 🛠️ 유틸리티: 날짜 형식 통일 (Zero-Failure)
     // ==========================================
+    const formatDate = (dateInput) => {
+      if (!dateInput) return null;
+      try {
+        const d = new Date(dateInput);
+        if (isNaN(d.getTime())) return null;
+        return d.toISOString().split('T')[0]; // 항상 YYYY-MM-DD 반환
+      } catch { return null; }
+    };
+
     function Layout({ activeTab, setActiveTab, children }) {
       const [isSidebarOpen, setIsSidebarOpen] = useState(false);
       const navItems = [
@@ -49,7 +55,7 @@
               <h1 className="font-bold text-xl text-slate-800 tracking-tight">🌲 Jake WorkOS</h1>
               <button className="md:hidden text-slate-500 font-bold text-xl" onClick={() => setIsSidebarOpen(false)}>✕</button>
             </div>
-            <nav className="p-4 space-y-2 flex-1">
+            <nav className="p-4 space-y-2 flex-1 overflow-y-auto no-scrollbar">
               {navItems.map(item => (
                 <button
                   key={item.id}
@@ -64,7 +70,7 @@
           <main className="flex-1 flex flex-col h-screen overflow-hidden bg-slate-50">
             <header className="h-14 bg-white border-b border-slate-200 flex items-center px-4 shrink-0 shadow-sm z-10 justify-between">
               <div className="flex items-center">
-                <button className="md:hidden p-2 text-slate-600 rounded-md bg-slate-100 mr-3" onClick={() => setIsSidebarOpen(true)}>☰</button>
+                <button className="md:hidden p-2 text-slate-600 rounded-md bg-gray-100 mr-3" onClick={() => setIsSidebarOpen(true)}>☰</button>
                 <div className="font-bold text-lg text-slate-700">{navItems.find(i => i.id === activeTab)?.label}</div>
               </div>
             </header>
@@ -75,125 +81,73 @@
     }
 
     // ==========================================
-    // 🧩 탭 1: Dashboard (대시보드 + 캘린더)
+    // 📊 탭 1: Dashboard
     // ==========================================
     function DashboardView() {
       const [loading, setLoading] = useState(true);
       const [dataList, setDataList] = useState([]);
       const [currentDate, setCurrentDate] = useState(new Date());
 
-      // 달이 바뀔 때마다 해당 달의 데이터만 호출 (1000건 한계 돌파)
-      useEffect(() => {
-        fetchData(currentDate);
-      }, [currentDate]);
+      useEffect(() => { fetchData(); }, [currentDate]);
 
-      const fetchData = async (date) => {
+      const fetchData = async () => {
         setLoading(true);
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        // 한 달 치 데이터를 넉넉하게 앞뒤로 가져오기 위함 (월초/월말 대비)
-        const startDate = `${year}-${month}-01`;
-        const endDate = `${year}-${month}-31`;
-
         try {
           const { data, error } = await supabaseClient
             .from('view_master_dashboard')
             .select('*')
-            .gte('실제_안치일정', startDate)
-            .lte('실제_안치일정', endDate)
-            .order('실제_안치일정', { ascending: true });
+            .not('실제_안치일정', 'is', null);
 
           if (error) throw error;
           setDataList(data || []);
-        } catch (error) {
-          console.error("DB 로드 에러:", error.message);
-        } finally {
-          setLoading(false);
-        }
+        } catch (error) { console.error("Error:", error); }
+        finally { setLoading(false); }
       };
 
-      // 📅 무결점 캘린더 생성 (월요일 시작)
       const calendarDays = useMemo(() => {
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth();
-        const firstDay = new Date(year, month, 1).getDay(); // 0(일) ~ 6(토)
-        
-        // 월요일(1)이 0번째 인덱스가 되도록 Offset 계산
+        const firstDay = new Date(year, month, 1).getDay();
         const startOffset = firstDay === 0 ? 6 : firstDay - 1; 
         const lastDate = new Date(year, month + 1, 0).getDate();
         
         const days = [];
         for (let i = 0; i < startOffset; i++) days.push(null);
-        
         for (let i = 1; i <= lastDate; i++) {
           const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-          const dayEvents = dataList.filter(row => row.실제_안치일정 && row.실제_안치일정.startsWith(dateStr));
+          const dayEvents = dataList.filter(row => formatDate(row.실제_안치일정) === dateStr);
           days.push({ day: i, dateStr, events: dayEvents });
         }
         return days;
       }, [currentDate, dataList]);
 
-      const changeMonth = (delta) => {
-        setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + delta, 1));
-      };
-
-      // 🛡️ 쓰레기값(0.0) 필터링 함수
       const getCleanName = (ev) => {
         let name = ev.마스터_고인명;
         if (!name || name === '0.0' || name === '0') name = ev.마스터_계약자;
-        if (!name || name === '0.0' || name === '0') name = '미상';
-        return name;
+        return name || '미상';
       };
 
       return (
         <div className="space-y-6">
-          {/* 요약 상황판 (현재 보고 있는 월 기준) */}
-          <div className="flex bg-slate-800 text-white rounded-xl shadow-lg relative">
-            {loading && <div className="absolute inset-0 bg-slate-800 bg-opacity-50 flex items-center justify-center rounded-xl font-bold">로딩 중...</div>}
-            <div className="flex-1 p-4 text-center border-r border-slate-600">
-              <div className="text-xs text-slate-400 font-bold mb-1">이번 달 안치 예정</div>
-              <div className="text-2xl font-black text-yellow-400">{dataList.length}건</div>
+          <div className="p-4 bg-white rounded-xl shadow-sm border border-slate-200">
+            <div className="flex justify-between items-center mb-4">
+              <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-2 border rounded">◀</button>
+              <h2 className="font-black text-xl">{currentDate.getFullYear()}년 {currentDate.getMonth() + 1}월</h2>
+              <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-2 border rounded">▶</button>
             </div>
-            <div className="flex-1 p-4 text-center border-r border-slate-600">
-              <div className="text-xs text-slate-400 font-bold mb-1">이번 달 각인 현황</div>
-              <div className="text-2xl font-black text-yellow-400">{dataList.filter(d => ['접수', '제작완료', '각인완료'].includes(d.각인_진행상태)).length}건</div>
-            </div>
-            <div className="flex-1 p-4 text-center">
-              <div className="text-xs text-slate-400 font-bold mb-1">이번 달 완료/기타</div>
-              <div className="text-2xl font-black text-white">{dataList.filter(d => d.각인_진행상태 === '설치완료').length}건</div>
-            </div>
-          </div>
-
-          {/* 📅 무결점 캘린더 영역 */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative">
-            {loading && <div className="absolute inset-0 bg-white bg-opacity-60 flex items-center justify-center z-10"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>}
-            
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <button onClick={() => changeMonth(-1)} className="px-3 py-1 bg-white border border-slate-300 rounded font-bold hover:bg-slate-100">◀</button>
-              <h2 className="font-black text-lg text-slate-800">{currentDate.getFullYear()}년 {currentDate.getMonth() + 1}월 일정</h2>
-              <button onClick={() => changeMonth(1)} className="px-3 py-1 bg-white border border-slate-300 rounded font-bold hover:bg-slate-100">▶</button>
-            </div>
-            
-            <div className="grid grid-cols-7 gap-px bg-slate-200">
-              {/* 요일 헤더 (월~일) */}
-              {['월', '화', '수', '목', '금', '토', '일'].map((day, i) => (
-                <div key={day} className={`text-center py-2 text-xs font-bold bg-white ${i === 5 ? 'text-blue-500' : i === 6 ? 'text-red-500' : 'text-slate-500'}`}>
-                  {day}
-                </div>
+            <div className="grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-lg overflow-hidden">
+              {['월', '화', '수', '목', '금', '토', '일'].map((d, i) => (
+                <div key={d} className={`p-2 text-center text-xs font-bold bg-slate-50 ${i === 6 ? 'text-red-500' : ''}`}>{d}</div>
               ))}
-              
-              {/* 날짜 셀 */}
-              {calendarDays.map((dayObj, i) => (
-                <div key={i} className={`bg-white min-h-[100px] p-1 flex flex-col ${!dayObj ? 'bg-slate-50' : ''}`}>
-                  {dayObj && (
+              {calendarDays.map((d, i) => (
+                <div key={i} className="bg-white min-h-[110px] p-1 border-t border-l border-slate-100">
+                  {d && (
                     <>
-                      <div className={`text-right text-xs font-bold mb-1 p-1 ${new Date().toDateString() === new Date(dayObj.dateStr).toDateString() ? 'bg-yellow-100 rounded text-yellow-800' : 'text-slate-600'}`}>
-                        {dayObj.day}
-                      </div>
-                      <div className="flex-1 overflow-y-auto no-scrollbar space-y-1">
-                        {dayObj.events.map((ev, idx) => (
-                          <div key={idx} className="bg-green-600 text-white text-[10.5px] sm:text-xs px-1.5 py-1 rounded truncate cursor-pointer shadow-sm font-semibold border border-green-700">
-                            🟢 {getCleanName(ev)} ({ev.안치번호?.split('/')[0] || '-'})
+                      <div className="text-right text-xs font-bold text-slate-400 mb-1">{d.day}</div>
+                      <div className="space-y-1">
+                        {d.events.map((ev, idx) => (
+                          <div key={idx} className="text-[10px] bg-green-600 text-white p-1 rounded leading-tight shadow-sm font-bold truncate">
+                            {getCleanName(ev)}
                           </div>
                         ))}
                       </div>
@@ -208,14 +162,61 @@
     }
 
     // ==========================================
-    // 🧩 미구현 탭 Placeholder (임시 화면)
+    // 🔍 탭 2: Field Map (Grid Slot View)
     // ==========================================
-    function PlaceholderView({ title }) {
+    function FieldView() {
+      const [loading, setLoading] = useState(true);
+      const [slots, setSlots] = useState([]);
+      const [selectedArea, setSelectedArea] = useState('A6'); // 기본 구역
+
+      useEffect(() => {
+        const fetchFieldData = async () => {
+          setLoading(true);
+          const { data } = await supabaseClient
+            .from('official_records')
+            .select('안치번호, 계약현황, 고인명, 계약자1')
+            .like('안치번호', `${selectedArea}%`);
+          setSlots(data || []);
+          setLoading(false);
+        };
+        fetchFieldData();
+      }, [selectedArea]);
+
       return (
-        <div className="flex flex-col items-center justify-center h-full text-slate-500">
-          <div className="text-4xl mb-4">🚧</div>
-          <h2 className="text-xl font-bold mb-2">{title}</h2>
-          <p>Phase 5에서 데이터 연동 및 컴포넌트 이식이 진행될 영역입니다.</p>
+        <div className="space-y-4">
+          <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+            {['A4', 'A5', 'A6', 'B2', 'B5'].map(area => (
+              <button 
+                key={area}
+                onClick={() => setSelectedArea(area)}
+                className={`px-4 py-2 rounded-full font-bold text-sm whitespace-nowrap ${selectedArea === area ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border'}`}
+              >
+                {area} 구역
+              </button>
+            ))}
+          </div>
+
+          <div className="bg-white p-4 rounded-xl border border-slate-200 min-h-[400px]">
+            {loading ? (
+              <div className="flex items-center justify-center h-48">데이터 분석 중...</div>
+            ) : (
+              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-10 gap-2">
+                {slots.map((slot, i) => (
+                  <div 
+                    key={i} 
+                    className={`aspect-square rounded-md p-1 flex flex-col items-center justify-center text-[9px] font-bold border ${
+                      slot.계약현황 === '장례' ? 'bg-green-100 border-green-300 text-green-800' :
+                      slot.계약현황 === '선분양' ? 'bg-blue-100 border-blue-300 text-blue-800' :
+                      'bg-slate-50 border-slate-200 text-slate-400'
+                    }`}
+                  >
+                    <div>{slot.안치번호.split('/').pop()}</div>
+                    <div className="truncate w-full text-center">{slot.고인명 || slot.계약자1 || ''}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       );
     }
@@ -225,11 +226,15 @@
       return (
         <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
           {activeTab === 'dashboard' && <DashboardView />}
-          {activeTab === 'field' && <PlaceholderView title="현장 관리 (Grid) 모듈" />}
-          {activeTab === 'engraving' && <PlaceholderView title="각인 관리 모듈" />}
-          {activeTab === 'project' && <PlaceholderView title="프로젝트 (WorkOS) 모듈" />}
+          {activeTab === 'field' && <FieldView />}
+          {activeTab === 'engraving' && <PlaceholderView title="각인 관리" />}
+          {activeTab === 'project' && <PlaceholderView title="프로젝트 (WorkOS)" />}
         </Layout>
       );
+    }
+
+    function PlaceholderView({ title }) {
+      return <div className="p-20 text-center text-slate-400 font-bold">{title} 모듈 준비 중</div>;
     }
 
     const root = ReactDOM.createRoot(document.getElementById('root'));
