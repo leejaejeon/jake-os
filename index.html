@@ -1193,6 +1193,7 @@
            );
        }, [engravings, engSearch]);
 
+       // ✅ [Fix] 띄어쓰기 무시를 위해 키값을 공백 없이 세팅, 알 수 없는 값은 1순위로 방어
        const statusWeight = { '접수': 1, '디자인완료': 2, '각인완료': 3, '설치완료': 4 };
 
        const folderList = useMemo(() => {
@@ -1202,10 +1203,17 @@
            }, {});
            
            const result = Object.entries(grouped).map(([contract, items]) => {
-               const highestUrgency = Math.min(...items.map(i => statusWeight[i.상태] || 1));
+               // 띄어쓰기를 없애고 가중치 검색, 못 찾으면 무조건 제일 급한 1(접수)로 취급하여 증발 방지
+               const highestUrgency = Math.min(...items.map(i => {
+                   const cleanStatus = String(i.상태 || '').replace(/\s/g, '');
+                   return statusWeight[cleanStatus] || 1; 
+               }));
+               
+               // 최고 우선순위에 해당하는 문자열 복원
                const repStatus = Object.keys(statusWeight).find(k => statusWeight[k] === highestUrgency) || '접수';
                const isDone = highestUrgency === 4;
                const earliestDate = items.reduce((min, i) => (!min || (i.안치_예정_일 && i.안치_예정_일 < min)) ? i.안치_예정_일 : min, null);
+               
                // 폴더 내 고인 정렬 (안치일 기준)
                items.sort((a,b) => new Date(b.안치_예정_일||0) - new Date(a.안치_예정_일||0));
                return { contract, items, isDone, repStatus, highestUrgency, earliestDate };
