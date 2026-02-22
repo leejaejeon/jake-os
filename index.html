@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Jake WorkOS V37 - Final Database Sync</title>
+  <title>Jake WorkOS V38 - Search Engine & Time Sync</title>
   
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -15,7 +15,9 @@
 
   <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
+    
     body { font-family: 'Pretendard', sans-serif; background-color: #f1f5f9; color: #1e293b; -webkit-font-smoothing: antialiased; }
+    
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-track { background: #f8fafc; border-radius: 4px; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; border: 2px solid #f8fafc; }
@@ -63,13 +65,20 @@
         return m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}` : null;
       } catch(e) { return null; }
     };
+    
+    // ✅ 초 단위까지 기록하는 시간 함수 (분쟁 방지용)
+    const getNowStr = () => {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+    };
+    const getTodayStr = () => new Date().toISOString().split('T')[0];
+
     const formatMoney = (val) => {
       try {
         const num = parseInt(String(val).replace(/[^0-9]/g, ''));
         return isNaN(num) ? '0원' : num.toLocaleString() + '원';
       } catch(e) { return '0원'; }
     };
-    const getTodayStr = () => new Date().toISOString().split('T')[0];
 
     const SECTION_LIST = ['A2/가','A3/가','A4/가','A4/나','A4/다','A5/가','A5/나','A6/가','A6/나','B1/가','B2/가','B3/가','B4/가','B5/가','B6/가/1-12','B6/가/13-14','C1/가'];
     const ROW_CONFIG = { 
@@ -109,7 +118,7 @@
         if (this.state.hasError) {
           return (
             <div className="p-8 m-4 bg-rose-50 border-2 border-rose-500 rounded-xl shadow-lg">
-              <h1 className="text-xl font-black text-rose-700 mb-2">🚨 V37 렌더링 에러</h1>
+              <h1 className="text-xl font-black text-rose-700 mb-2">🚨 V38 렌더링 에러</h1>
               <pre className="text-xs bg-white p-4 rounded border border-rose-200 overflow-auto">{this.state.error?.toString()}</pre>
             </div>
           );
@@ -148,7 +157,7 @@
           try {
             const res = await supabaseClient.from('field_data').select('위치_번호, 계약_상태, 성함').eq('구역', area);
             setData(res.data || []);
-          } catch(e) {}
+          } catch(e) { console.error(e); }
           setLoading(false);
         };
         fetchField();
@@ -234,6 +243,9 @@
       );
     }
 
+    // ==========================================
+    // 📊 Dashboard View
+    // ==========================================
     function DashboardView({ layoutData }) {
       const [loading, setLoading] = useState(true);
       const [events, setEvents] = useState([]);
@@ -248,6 +260,9 @@
       const [mapSelectorOpen, setMapSelectorOpen] = useState(false);
       const [selectedLocBase, setSelectedLocBase] = useState('');
       const [gwangjung, setGwangjung] = useState('');
+      
+      // ✅ 영업 대기 명단 검색어 스테이트
+      const [salesSearch, setSalesSearch] = useState('');
 
       const fetchAll = async () => {
         setLoading(true);
@@ -260,7 +275,7 @@
           const bEvs = (burRes.data || []).map(b => ({ id: b.id, type:'burial', date:normalizeDate(b.안치일), title:clean(b.고인명), sub:clean(b.위치), raw:b }));
           const sEvs = (salRes.data || []).map(s => {
             const custName = clean(s['고객_고인_명'] || s['고객(고인)명'] || s.고객명 || '이름없음');
-            return { id: s.id, type:'sales', date:normalizeDate(s.답사일)||normalizeDate(s.등록일), title:custName, sub:`${clean(s.영업자사명)}/${clean(s.영업자성함)}`, status:s.현재상태, raw:s, regDate: new Date(normalizeDate(s.등록일) || 0) };
+            return { id: s.id, type:'sales', date:normalizeDate(s.답사일)||normalizeDate(s.등록일), title:custName, sub:`${clean(s.영업자사명)}/${clean(s.영업자성함)}`, status:s.현재상태, raw:s, regDate: new Date(s.등록일 || 0) };
           });
           setEvents([...bEvs, ...sEvs].filter(e => e.date !== null));
           
@@ -313,8 +328,9 @@
         EMPLOYEES.forEach(emp => {
             const st = cln[`${targetDate}_${emp}`];
             if(st) {
+                // ✅ 반차 배열 조건에 생짜 '반차' 추가
                 if(['휴무','연차','병가'].includes(st)) hrCount += 1;
-                else if(['오전반차','오후반차','조퇴'].includes(st)) hrCount += 0.5;
+                else if(['반차','오전반차','오후반차','조퇴'].includes(st)) hrCount += 0.5;
             }
         });
         return { targetDate, burials, sales, hr: hrCount };
@@ -322,8 +338,27 @@
 
       const undecidedList = useMemo(() => {
         let list = events.filter(e => e.type === 'sales' && e.status !== '안치확정' && e.status !== '취소');
-        return list.sort((a, b) => b.regDate - a.regDate);
+        // ✅ 최신 시간(미래)이 가장 위로 오도록 정렬 (등록일 타임스탬프 기준 역순)
+        return list.sort((a, b) => b.regDate.getTime() - a.regDate.getTime());
       }, [events]);
+
+      // ✅ 대기 명단 실시간 검색 필터
+      const filteredUndecided = useMemo(() => {
+          if(!salesSearch.trim()) return undecidedList;
+          const q = salesSearch.toLowerCase();
+          const cleanPhone = (p) => String(p||'').replace(/[^0-9]/g, '');
+          const qPhone = cleanPhone(q);
+          
+          return undecidedList.filter(ev => {
+              const raw = ev.raw;
+              const corp = String(raw.영업자사명||'').toLowerCase();
+              const staff = String(raw.영업자성함||'').toLowerCase();
+              const cust = String(ev.title||'').toLowerCase();
+              const memo = String(raw.비고메모||raw.비고||'').toLowerCase();
+              const phone = cleanPhone(raw.연락처);
+              return corp.includes(q) || staff.includes(q) || cust.includes(q) || memo.includes(q) || (qPhone && phone.includes(qPhone));
+          });
+      }, [undecidedList, salesSearch]);
 
       const handleCellClick = (dateStr, dayEvents) => {
         setDailyModal({ isOpen: true, dateStr, events: dayEvents });
@@ -368,7 +403,7 @@
       const saveSales = async (e) => {
           e.preventDefault();
           const payload = {
-              등록일: e.target.s_regDate.value || new Date().toISOString(),
+              등록일: e.target.s_regDate.value || getNowStr(), // ✅ 시간까지 기록되도록 getNowStr() 적용
               답사일: e.target.s_visitDate.value,
               영업자사명: e.target.s_corp.value,
               영업자성함: e.target.s_staff.value,
@@ -389,7 +424,7 @@
               err = res.error;
           }
           if(err) {
-              alert(`🚨 DB 거부됨: ${err.message}`); return;
+              alert(`🚨 DB 거부됨: ${err.message}\n[해결책] Supabase 'status_mgmt' 테이블의 '고객명' 컬럼을 '고객_고인_명' 으로 수정해주세요.`); return;
           }
           logAction('영업현황', salesModal.data ? '수정' : '신규등록', payload.고객_고인_명, `상태: ${payload.현재상태}`);
           setSalesModal({isOpen:false, data:null});
@@ -436,7 +471,7 @@
             </div>
             
             <div className="px-4 pt-4">
-              <button onClick={() => setUndecidedModalOpen(true)} className="w-full bg-orange-50 hover:bg-orange-100 transition text-orange-700 border border-orange-200 font-black py-3 rounded-xl shadow-sm flex justify-between px-4">
+              <button onClick={() => { setSalesSearch(''); setUndecidedModalOpen(true); }} className="w-full bg-orange-50 hover:bg-orange-100 transition text-orange-700 border border-orange-200 font-black py-3 rounded-xl shadow-sm flex justify-between px-4">
                   <span>📍 영업 대기 및 선점 명단 확인</span>
                   <span className="bg-orange-500 text-white px-2 py-0.5 rounded-lg">{undecidedList.length}건</span>
               </button>
@@ -469,7 +504,7 @@
               </div>
             </div>
           </div>
-          
+
           <Modal isOpen={dailyModal.isOpen} onClose={()=>setDailyModal({...dailyModal, isOpen:false})} title={`📅 ${dailyModal.dateStr} 일정`}>
             {dailyModal.events.length === 0 ? <div className="text-center p-8 text-slate-400 font-bold">등록된 일정이 없습니다.</div> : (
               <div className="space-y-2">
@@ -508,25 +543,30 @@
           </Modal>
 
           <Modal isOpen={undecidedModalOpen} onClose={()=>setUndecidedModalOpen(false)} title="📍 영업 대기 및 선점 명단">
-              <div className="space-y-2 max-h-[60vh] overflow-y-auto no-scrollbar">
-                  {undecidedList.map(ev => (
+              <div className="mb-4">
+                  <input type="text" value={salesSearch} onChange={e=>setSalesSearch(e.target.value)} placeholder="🔍 고객명, 사명, 연락처, 비고 검색..." className="w-full p-3 rounded-xl border border-slate-300 text-sm font-bold bg-white focus:border-blue-500 focus:outline-none" />
+              </div>
+              <div className="space-y-2 max-h-[55vh] overflow-y-auto no-scrollbar">
+                  {filteredUndecided.map(ev => (
                       <div key={ev.id} onClick={() => { setUndecidedModalOpen(false); setSalesModal({isOpen:true, data:ev}); }} className="p-3 bg-white border border-orange-200 rounded-xl cursor-pointer hover:bg-orange-50 shadow-sm transition">
                           <div className="flex justify-between items-center mb-1.5">
                               <span className="font-black text-[14px] text-slate-800">{ev.title} <span className="text-slate-500 font-bold text-[12px]">({ev.sub})</span></span>
                               <span className="text-[10px] font-black text-orange-600 bg-orange-100 px-2 py-0.5 rounded">{ev.status}</span>
                           </div>
                           <div className="text-[12px] font-bold text-blue-600 mb-1">📞 {ev.raw?.연락처 || '연락처 없음'}</div>
-                          <div className="text-[11px] text-slate-500 font-bold">⏰ 찜 등록: {normalizeDate(ev.raw?.등록일) || '-'}</div>
+                          <div className="text-[11px] text-slate-500 font-bold">⏰ 등록: {normalizeDate(ev.raw?.등록일) || ev.raw?.등록일 || '-'}</div>
                       </div>
                   ))}
+                  {filteredUndecided.length === 0 && <div className="text-center p-5 text-slate-400 font-bold">검색 결과가 없습니다.</div>}
               </div>
           </Modal>
 
           <Modal isOpen={salesModal.isOpen} onClose={()=>setSalesModal({isOpen:false, data:null})} title={salesModal.data ? "🟡 영업 현황 수정" : "📝 영업 현황 신규 등록"} isNested={true}>
               <form onSubmit={saveSales} className="space-y-4">
                   <div className="input-group">
-                      <label className="form-label">등록 일시</label>
-                      <input name="s_regDate" type="text" className="form-input bg-yellow-50 text-red-600" defaultValue={normalizeDate(salesModal.data?.raw?.등록일) || ''} placeholder="빈칸 시 현재시간 저장" />
+                      <label className="form-label">등록 일시 (시간 포함)</label>
+                      {/* ✅ 수정됨: 빈칸일 경우 초단위 시간 자동 저장 안내 */}
+                      <input name="s_regDate" type="text" className="form-input bg-yellow-50 text-red-600" defaultValue={salesModal.data?.raw?.등록일 || ''} placeholder="비워두면 현재 시간 자동 기록" />
                   </div>
                   <div className="input-group">
                       <label className="form-label">답사 예정일</label>
@@ -609,12 +649,13 @@
       );
     }
 
-    // 📈 Stats View (분리된 차트 영역)
+    // 📈 Stats View (차트 팝업 적용)
     function StatsView() {
       const [events, setEvents] = useState([]);
       const [currentDate, setCurrentDate] = useState(new Date());
       const chartRef = useRef(null);
       const chartInstance = useRef(null);
+      const [detailModal, setDetailModal] = useState({ isOpen: false, month: '', items: [] });
 
       useEffect(() => {
         const fetchEvents = async () => {
@@ -645,6 +686,7 @@
             labels.push(`${String(y).substring(2)}-${m}`); 
             dataCounts.push(uniqueBurials.size);
         }
+        
         if (chartInstance.current) chartInstance.current.destroy();
         const ctx = chartRef.current.getContext('2d');
         chartInstance.current = new Chart(ctx, {
@@ -654,7 +696,17 @@
                 responsive: true, maintainAspectRatio: false,
                 layout: { padding: { top: 20 } },
                 plugins: { legend: { display: false }, datalabels: { anchor: 'end', align: 'end', color: '#333', font: { weight: 'bold', size: 10 }, formatter: v => v > 0 ? v : "" } },
-                scales: { y: { beginAtZero: true, grace: '10%', ticks: { stepSize: 1 } }, x: { ticks: { font: { size: 9 } } } }
+                scales: { y: { beginAtZero: true, grace: '10%', ticks: { stepSize: 1 } }, x: { ticks: { font: { size: 9 } } } },
+                // ✅ 차트 클릭 이벤트 부착 (해당 월 팝업)
+                onClick: (e, activeElements) => {
+                    if (activeElements.length > 0) {
+                        const idx = activeElements[0].index;
+                        const clickedLabel = labels[idx]; // "26-02"
+                        const fullMonth = `20${clickedLabel}`; // "2026-02"
+                        const monthEvents = events.filter(ev => ev.type === 'burial' && ev.date && ev.date.startsWith(fullMonth));
+                        setDetailModal({ isOpen: true, month: fullMonth, items: monthEvents });
+                    }
+                }
             }
         });
       }, [events, currentDate]);
@@ -662,16 +714,32 @@
       return (
         <div className="space-y-4 max-w-7xl mx-auto flex flex-col w-full relative mb-10">
           <div className="bg-white rounded-2xl shadow border border-slate-200 p-6">
-              <h3 className="text-left font-black text-slate-800 text-lg mb-4">📈 월별 안치 현황 분석 (최근 16개월)</h3>
-              <div className="w-full h-[400px] relative">
+              <h3 className="text-left font-black text-slate-800 text-lg mb-2">📈 월별 안치 현황 분석 (최근 16개월)</h3>
+              <p className="text-xs text-slate-500 font-bold mb-4">막대 그래프를 클릭하면 해당 월의 안치 명단을 확인할 수 있습니다.</p>
+              <div className="w-full h-[400px] relative cursor-pointer">
                   <canvas ref={chartRef}></canvas>
               </div>
           </div>
+
+          {/* ✅ 해당 월 안치 리스트 팝업 모달 */}
+          <Modal isOpen={detailModal.isOpen} onClose={()=>setDetailModal({isOpen:false, month:'', items:[]})} title={`📅 ${detailModal.month} 안치 명단`}>
+             <div className="space-y-2 max-h-[60vh] overflow-y-auto no-scrollbar">
+                {detailModal.items.length === 0 ? <p className="text-center p-5 text-slate-400 font-bold">안치 내역이 없습니다.</p> : detailModal.items.map((ev, i) => (
+                    <div key={i} className="p-3 bg-white border border-emerald-200 rounded-xl flex justify-between items-center shadow-sm">
+                        <div>
+                            <div className="font-black text-slate-800">{ev.raw.고인명} <span className="text-xs text-slate-500 font-bold ml-1">({ev.raw.계약자})</span></div>
+                            <div className="text-[11px] text-blue-600 font-bold">{ev.raw.위치}</div>
+                        </div>
+                        <div className="text-xs font-bold text-slate-500">{ev.date}</div>
+                    </div>
+                ))}
+             </div>
+          </Modal>
         </div>
       );
     }
 
-    // 🏖️ HR View
+    // 🏖️ HR View (반차 텍스트 매칭 픽스)
     function HrView() {
       const [loading, setLoading] = useState(true);
       const [hrData, setHrData] = useState([]);
@@ -732,8 +800,9 @@
         for (const [k, st] of Object.entries(cln)) {
           let [dt, nm] = k.split('_');
           if (dt.startsWith(pfx)) {
+            // ✅ 수정됨: 생짜 '반차' 글자도 잡아내서 카운트
             if (['휴무','연차','병가'].includes(st)) sFull[nm] = (sFull[nm]||0) + 1;
-            else if (['오전반차','오후반차','조퇴'].includes(st)) sHalf[nm] = (sHalf[nm]||0) + 1;
+            else if (['반차','오전반차','오후반차','조퇴'].includes(st)) sHalf[nm] = (sHalf[nm]||0) + 1;
           }
         }
         
@@ -768,7 +837,8 @@
           EMPLOYEES.forEach(emp => {
              const st = cln[`${ds}_${emp}`] || '출근';
              let multiplier = 1;
-             if (['오전반차', '오후반차', '조퇴'].includes(st)) multiplier = 0.5;
+             // ✅ 수정됨: 생짜 '반차' 글자 적용
+             if (['반차','오전반차', '오후반차', '조퇴'].includes(st)) multiplier = 0.5;
              else if (['휴무', '연차', '병가'].includes(st)) multiplier = 0;
              
              if (EMP_WEIGHTS[emp]) {
@@ -786,6 +856,7 @@
           let warnings = [];
           if (cap.contract <= 1) warnings.push('계약');
           if (salesCount > 0 && cap.guide <= 2) warnings.push('안내');
+          // ✅ 수정됨: 안치 4건 이상일 때만 경고
           if (burialCount >= 4 && cap.burial <= 2) warnings.push('안치');
 
           days.push({ day: i, dateStr: ds, cap, warnings });
@@ -905,20 +976,41 @@
     function FieldView({ layoutData }) {
       const [loading, setLoading] = useState(true);
       const [data, setData] = useState([]);
+      const [allFieldData, setAllFieldData] = useState([]);
       const [area, setArea] = useState('A6/가');
       const [slotModal, setSlotModal] = useState({ isOpen: false, data: null });
+      
+      // ✅ 지도 실시간 검색 스테이트
+      const [searchQuery, setSearchQuery] = useState('');
+      const [searchResults, setSearchResults] = useState([]);
 
       useEffect(() => {
         const fetchField = async () => {
           setLoading(true);
           try {
-            const res = await supabaseClient.from('field_data').select('*').eq('구역', area);
-            setData(res.data || []);
-          } catch(e) { console.error("DB Fetch Error:", e); }
+            const [areaRes, allRes] = await Promise.all([
+               supabaseClient.from('field_data').select('*').eq('구역', area),
+               supabaseClient.from('field_data').select('*') // 검색용 전체 데이터 로드
+            ]);
+            setData(areaRes.data || []);
+            setAllFieldData(allRes.data || []);
+          } catch(e) { console.error(e); }
           setLoading(false);
         };
         fetchField();
       }, [area]);
+
+      // ✅ 실시간 검색 필터링 엔진
+      useEffect(() => {
+         if(searchQuery.trim().length === 0) { setSearchResults([]); return; }
+         const q = searchQuery.toLowerCase();
+         const res = allFieldData.filter(d => 
+             (clean(d.성함).toLowerCase().includes(q)) || 
+             (clean(d.계약자).toLowerCase().includes(q)) || 
+             (clean(d.메모).toLowerCase().includes(q))
+         );
+         setSearchResults(res);
+      }, [searchQuery, allFieldData]);
 
       const renderedGrid = useMemo(() => {
         if (!layoutData || !layoutData[area]) return [];
@@ -980,20 +1072,45 @@
           if(err) { alert(`저장 실패: ${err.message}`); return; }
           logAction('현장관리', '수정', `${area} ${slotModal.data.위치_번호}`, `상태: ${payload.계약_상태}`);
           setSlotModal({isOpen:false, data:null});
+          
           setLoading(true);
-          const res = await supabaseClient.from('field_data').select('*').eq('구역', area);
-          setData(res.data || []);
+          const [areaRes, allRes] = await Promise.all([
+             supabaseClient.from('field_data').select('*').eq('구역', area),
+             supabaseClient.from('field_data').select('*')
+          ]);
+          setData(areaRes.data || []);
+          setAllFieldData(allRes.data || []);
           setLoading(false);
       };
 
       return (
         <div className="space-y-4 max-w-7xl mx-auto flex flex-col w-full relative mb-10">
-          <div className="flex gap-2 overflow-x-auto pb-2 border-b border-slate-200 px-2 w-full no-scrollbar shrink-0 sticky top-14 bg-[#F8FAFC] z-[80] pt-2" style={{ WebkitOverflowScrolling: 'touch' }}>
-            {SECTION_LIST.map(s => (
-              <button key={s} onClick={() => setArea(s)} className={`flex-none px-4 py-2.5 rounded-t-xl font-bold text-[13px] whitespace-nowrap transition-all border-t border-l border-r ${area === s ? 'bg-white text-blue-600 border-slate-200 translate-y-[1px] shadow-[0_-2px_4px_rgba(0,0,0,0.02)]' : 'bg-slate-100 text-slate-500 border-transparent hover:bg-slate-200'}`}>
-                {s}
-              </button>
-            ))}
+          
+          {/* ✅ 현장 지도 검색 바 */}
+          <div className="px-2 pt-2 relative z-50">
+             <input type="text" placeholder="🔍 고인명, 계약자, 비고 검색..." value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} className="w-full p-3 rounded-xl border border-slate-300 shadow-sm text-sm font-bold focus:border-blue-500 focus:outline-none" />
+             {searchResults.length > 0 && (
+                 <div className="absolute top-full left-0 w-full bg-white border border-slate-200 shadow-xl rounded-xl mt-1 max-h-60 overflow-y-auto z-[100]">
+                     {searchResults.map(r => (
+                         <div key={r.id} onClick={() => { setArea(r.구역); setSlotModal({isOpen:true, data:r}); setSearchQuery(''); }} className="p-3 border-b hover:bg-slate-50 cursor-pointer">
+                             <div className="font-black text-blue-600">{r.구역} {r.위치_번호}</div>
+                             <div className="text-sm font-bold">안치자: {clean(r.성함)||'없음'} | 계약자: {clean(r.계약자)||'없음'}</div>
+                             <div className="text-xs text-slate-500 truncate">{clean(r.메모)}</div>
+                         </div>
+                     ))}
+                 </div>
+             )}
+          </div>
+
+          {/* ✅ 스크롤 버그 픽스: block 래퍼로 묶음 */}
+          <div className="w-full bg-[#F8FAFC] sticky top-14 z-[80] pt-1 pb-2 border-b border-slate-200">
+             <div className="flex gap-2 overflow-x-auto px-2 no-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
+               {SECTION_LIST.map(s => (
+                 <button key={s} onClick={() => setArea(s)} className={`flex-none px-4 py-2.5 rounded-t-xl font-bold text-[13px] whitespace-nowrap transition-all border-t border-l border-r ${area === s ? 'bg-white text-blue-600 border-slate-200 translate-y-[1px] shadow-[0_-2px_4px_rgba(0,0,0,0.02)]' : 'bg-slate-100 text-slate-500 border-transparent hover:bg-slate-200'}`}>
+                   {s}
+                 </button>
+               ))}
+             </div>
           </div>
 
           <div className="bg-white p-4 md:p-8 rounded-b-2xl rounded-tr-2xl shadow-xl border border-slate-200 overflow-auto w-full">
@@ -1079,290 +1196,49 @@
       );
     }
 
-    // 🚀 워크스페이스 모듈 (DB 구조 최적화 매핑)
+    // 🚀 워크스페이스 대기 모듈 (데이터베이스 연결 대기중)
     function ProjectsWorkspace() {
-       const [projects, setProjects] = useState([]);
-       const [modal, setModal] = useState({ isOpen: false, data: null });
-
-       const fetchProjects = async () => {
-           try {
-               const res = await supabaseClient.from('project_db').select('*').order('id', {ascending: false});
-               if(res.data) setProjects(res.data);
-           } catch(e) {}
-       };
-       useEffect(() => { fetchProjects(); }, []);
-
-       const saveProject = async (e) => {
-           e.preventDefault();
-           const payload = { title: e.target.p_title.value, personnel: e.target.p_manager.value, end_date: e.target.p_deadline.value, status: e.target.p_status.value };
-           let err;
-           if(modal.data?.id) {
-               const res = await supabaseClient.from('project_db').update(payload).eq('id', modal.data.id); err = res.error;
-           } else {
-               payload.id = 'proj-' + Date.now(); // text PK fallback
-               const res = await supabaseClient.from('project_db').insert(payload); err = res.error;
-           }
-           if(err) { alert("추가 실패: " + err.message); return; }
-           setModal({isOpen:false, data:null});
-           fetchProjects();
-       };
-
-       const moveProject = async (id, newStatus) => {
-           await supabaseClient.from('project_db').update({status: newStatus}).eq('id', id);
-           fetchProjects();
-       };
-
        return (
-          <div className="bg-white p-4 sm:p-8 rounded-2xl shadow border border-slate-200 min-h-[50vh] w-full mb-10">
+          <div className="bg-white p-4 sm:p-8 rounded-2xl shadow border border-slate-200 min-h-[50vh] w-full mt-4">
              <div className="flex justify-between items-center mb-6 border-b pb-4">
                 <h2 className="text-xl sm:text-2xl font-black text-slate-800">🚀 프로젝트 칸반 보드</h2>
-                <button onClick={() => setModal({isOpen:true, data:null})} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow text-sm transition">+ 태스크 추가</button>
              </div>
-             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {['To Do', 'Doing', 'Done'].map(status => {
-                    const list = projects.filter(p => p.status === status);
-                    const colors = { 'To Do':'bg-slate-50 border-slate-200 text-slate-600', 'Doing':'bg-indigo-50 border-indigo-100 text-indigo-800', 'Done':'bg-emerald-50 border-emerald-100 text-emerald-800' };
-                    return (
-                        <div key={status} className={`p-4 rounded-xl border min-h-[300px] ${colors[status]}`}>
-                           <h3 className="font-black mb-3 flex justify-between">{status} <span className="bg-white px-2 rounded-full shadow-sm">{list.length}</span></h3>
-                           <div className="space-y-3">
-                               {list.map(p => (
-                                   <div key={p.id} className="bg-white p-3 rounded-lg shadow-sm border border-slate-100 hover:shadow-md transition">
-                                      <p onClick={()=>setModal({isOpen:true, data:p})} className="font-bold text-sm text-slate-800 cursor-pointer hover:text-indigo-600">{p.title}</p>
-                                      <div className="text-[10px] text-slate-500 mt-2 flex justify-between items-center">
-                                          <span>마감: {p.end_date || '-'} | 담당: {p.personnel}</span>
-                                          <div className="space-x-2">
-                                            {status === 'To Do' && <button onClick={()=>moveProject(p.id, 'Doing')} className="text-indigo-600 font-black hover:underline">시작 ▶</button>}
-                                            {status === 'Doing' && <button onClick={()=>moveProject(p.id, 'Done')} className="text-emerald-600 font-black hover:underline">완료 ✔️</button>}
-                                          </div>
-                                      </div>
-                                   </div>
-                               ))}
-                           </div>
-                        </div>
-                    )
-                })}
-             </div>
-
-             <Modal isOpen={modal.isOpen} onClose={()=>setModal({isOpen:false, data:null})} title={modal.data ? "태스크 수정" : "새 태스크 추가"} isNested={true}>
-                 <form onSubmit={saveProject} className="space-y-4">
-                     <div className="input-group"><label className="form-label">태스크 명</label><input name="p_title" type="text" className="form-input" defaultValue={modal.data?.title} required /></div>
-                     <div className="grid grid-cols-2 gap-3">
-                         <div className="input-group"><label className="form-label">담당자</label><input name="p_manager" type="text" className="form-input" defaultValue={modal.data?.personnel || 'Jake'} /></div>
-                         <div className="input-group"><label className="form-label">마감일</label><input name="p_deadline" type="date" className="form-input" defaultValue={modal.data?.end_date} /></div>
-                     </div>
-                     <div className="input-group">
-                         <label className="form-label">진행 상태</label>
-                         <select name="p_status" className="form-input" defaultValue={modal.data?.status || 'To Do'}>
-                             <option>To Do</option><option>Doing</option><option>Done</option>
-                         </select>
-                     </div>
-                     <div className="flex gap-2 pt-2">
-                         <button type="submit" className="w-full py-3 bg-indigo-600 text-white font-black rounded-xl text-sm hover:bg-indigo-700 shadow-lg">저장</button>
-                     </div>
-                 </form>
-             </Modal>
+             <p className="text-center text-slate-500 font-bold py-10">DB 매핑 작업 대기중...</p>
           </div>
        )
     }
 
     function MinutesWorkspace() {
-       const [minutes, setMinutes] = useState([]);
-       const [modal, setModal] = useState({ isOpen: false, data: null });
-
-       const fetchMinutes = async () => {
-           try {
-               const res = await supabaseClient.from('meeting_logs').select('*').order('meeting_date', {ascending: false});
-               if(res.data) setMinutes(res.data);
-           } catch(e) {}
-       };
-       useEffect(() => { fetchMinutes(); }, []);
-
-       const saveMinute = async (e) => {
-           e.preventDefault();
-           const payload = { meeting_date: e.target.m_date.value, topic: e.target.m_title.value, content: e.target.m_content.value };
-           let err;
-           if(modal.data?.id) {
-               const res = await supabaseClient.from('meeting_logs').update(payload).eq('id', modal.data.id); err = res.error;
-           } else {
-               const res = await supabaseClient.from('meeting_logs').insert(payload); err = res.error;
-           }
-           if(err) { alert("저장 실패: " + err.message); return; }
-           setModal({isOpen:false, data:null});
-           fetchMinutes();
-       };
-
        return (
-          <div className="bg-white p-4 sm:p-8 rounded-2xl shadow border border-slate-200 min-h-[50vh] w-full mt-4 mb-10">
-             <div className="flex justify-between items-center mb-6 border-b pb-4">
-                <h2 className="text-xl sm:text-2xl font-black text-slate-800">📝 회의록 관리소</h2>
-                <button onClick={() => setModal({isOpen:true, data:null})} className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg shadow text-sm hover:bg-indigo-700 transition">+ 새 회의록</button>
-             </div>
-             <div className="space-y-3">
-                 {minutes.length === 0 ? <p className="text-center text-slate-400 py-10 font-bold">등록된 회의록이 없습니다.</p> : minutes.map(m => (
-                     <div key={m.id} onClick={() => setModal({isOpen:true, data:m})} className="p-4 border border-slate-200 rounded-xl hover:bg-indigo-50 transition cursor-pointer">
-                         <div className="text-xs text-indigo-500 font-bold mb-1">{m.meeting_date}</div>
-                         <div className="font-black text-slate-800">{m.topic}</div>
-                     </div>
-                 ))}
-             </div>
-
-             <Modal isOpen={modal.isOpen} onClose={()=>setModal({isOpen:false, data:null})} title={modal.data ? "회의록 수정" : "새 회의록 작성"} isNested={true}>
-                 <form onSubmit={saveMinute} className="space-y-4">
-                     <div className="input-group"><label className="form-label">회의 일자</label><input name="m_date" type="date" className="form-input" defaultValue={modal.data?.meeting_date || getTodayStr()} required /></div>
-                     <div className="input-group"><label className="form-label">안건 / 제목</label><input name="m_title" type="text" className="form-input" defaultValue={modal.data?.topic} required /></div>
-                     <div className="input-group"><label className="form-label">회의 내용 (결정사항)</label><textarea name="m_content" className="form-input min-h-[150px]" defaultValue={modal.data?.content}></textarea></div>
-                     <div className="flex gap-2 pt-2">
-                         <button type="submit" className="w-full py-3 bg-indigo-600 text-white font-black rounded-xl text-sm hover:bg-indigo-700 shadow-lg">DB 저장</button>
-                     </div>
-                 </form>
-             </Modal>
+          <div className="bg-white p-8 rounded-2xl shadow border border-slate-200 text-center min-h-[50vh] flex flex-col justify-center items-center mt-4">
+             <div className="text-4xl mb-4">📝</div>
+             <h2 className="text-2xl font-black text-slate-800 mb-2">회의록 관리소</h2>
+             <p className="text-slate-500 font-bold">DB 매핑 작업 대기중...</p>
           </div>
        )
     }
 
     function EngravingWorkspace() {
-       const [engravings, setEngravings] = useState([]);
-       const [modal, setModal] = useState({ isOpen: false, data: null });
-
-       const fetchEngravings = async () => {
-           try {
-               const res = await supabaseClient.from('engraving_mgmt').select('*').order('uid', {ascending: false});
-               if(res.data) setEngravings(res.data);
-           } catch(e) {}
-       };
-       useEffect(() => { fetchEngravings(); }, []);
-
-       const saveEngraving = async (e) => {
-           e.preventDefault();
-           const payload = { 제작일: e.target.e_date.value, 상세좌표: e.target.e_loc.value, 고인명: e.target.e_name.value, 규격: e.target.e_stone.value, 상태: e.target.e_status.value };
-           let err;
-           if(modal.data?.uid) {
-               const res = await supabaseClient.from('engraving_mgmt').update(payload).eq('uid', modal.data.uid); err = res.error;
-           } else {
-               payload.uid = 'eng-' + Date.now();
-               const res = await supabaseClient.from('engraving_mgmt').insert(payload); err = res.error;
-           }
-           if(err) { alert("저장 실패: " + err.message); return; }
-           setModal({isOpen:false, data:null});
-           fetchEngravings();
-       };
-
        return (
-          <div className="bg-white p-4 sm:p-8 rounded-2xl shadow border border-slate-200 min-h-[50vh] w-full overflow-x-auto mt-4 mb-10">
-             <div className="flex justify-between items-center mb-6 border-b pb-4 min-w-[500px]">
-                <h2 className="text-xl sm:text-2xl font-black text-slate-800">⚰️ 비석 각인/발주 현황</h2>
-                <button onClick={() => setModal({isOpen:true, data:null})} className="px-4 py-2 bg-stone-800 text-white font-bold rounded-lg shadow text-sm hover:bg-stone-700 transition">+ 신규 발주</button>
-             </div>
-             <div className="min-w-[600px]">
-                <table className="w-full text-left border-collapse">
-                   <thead>
-                      <tr className="bg-slate-100 text-slate-600 text-xs font-black uppercase">
-                         <th className="p-3 border-b rounded-tl-lg">발주일자</th>
-                         <th className="p-3 border-b">안치위치</th>
-                         <th className="p-3 border-b">고인명</th>
-                         <th className="p-3 border-b">석재종류</th>
-                         <th className="p-3 border-b rounded-tr-lg">진행상태</th>
-                      </tr>
-                   </thead>
-                   <tbody>
-                      {engravings.length === 0 ? <tr><td colSpan="5" className="text-center py-10 text-slate-400 font-bold">진행 중인 발주 건이 없습니다.</td></tr> : engravings.map(e => (
-                          <tr key={e.uid} onClick={() => setModal({isOpen:true, data:e})} className="hover:bg-stone-50 transition cursor-pointer border-b border-slate-100">
-                             <td className="p-3 text-sm font-bold text-slate-700">{e.제작일}</td>
-                             <td className="p-3 text-sm font-bold text-blue-600">{e.상세좌표 || '-'}</td>
-                             <td className="p-3 text-sm font-black">{e.고인명}</td>
-                             <td className="p-3 text-xs text-slate-500">{e.규격 || '미정'}</td>
-                             <td className="p-3"><span className={`px-2 py-1 rounded text-[10px] font-black ${e.상태==='완료' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{e.상태}</span></td>
-                          </tr>
-                      ))}
-                   </tbody>
-                </table>
-             </div>
-
-             <Modal isOpen={modal.isOpen} onClose={()=>setModal({isOpen:false, data:null})} title={modal.data ? "발주 정보 수정" : "새 비석 발주"} isNested={true}>
-                 <form onSubmit={saveEngraving} className="space-y-4">
-                     <div className="grid grid-cols-2 gap-3">
-                         <div className="input-group"><label className="form-label">발주일자</label><input name="e_date" type="date" className="form-input" defaultValue={modal.data?.제작일 || getTodayStr()} required /></div>
-                         <div className="input-group"><label className="form-label">안치위치</label><input name="e_loc" type="text" className="form-input" defaultValue={modal.data?.상세좌표} placeholder="예: B6/가 4-9" /></div>
-                     </div>
-                     <div className="input-group"><label className="form-label">고인명</label><input name="e_name" type="text" className="form-input" defaultValue={modal.data?.고인명} required /></div>
-                     <div className="grid grid-cols-2 gap-3">
-                         <div className="input-group"><label className="form-label">석재종류</label><input name="e_stone" type="text" className="form-input" defaultValue={modal.data?.규격} placeholder="오석/자연석 등" /></div>
-                         <div className="input-group"><label className="form-label">진행상태</label>
-                             <select name="e_status" className="form-input" defaultValue={modal.data?.상태 || '시안 대기'}>
-                                 <option>시안 대기</option><option>발주 진행</option><option>완료</option>
-                             </select>
-                         </div>
-                     </div>
-                     <div className="flex gap-2 pt-2">
-                         <button type="submit" className="w-full py-3 bg-stone-800 text-white font-black rounded-xl text-sm hover:bg-stone-700 shadow-lg">DB 저장</button>
-                     </div>
-                 </form>
-             </Modal>
+          <div className="bg-white p-8 rounded-2xl shadow border border-slate-200 text-center min-h-[50vh] flex flex-col justify-center items-center mt-4">
+             <div className="text-4xl mb-4">⚰️</div>
+             <h2 className="text-2xl font-black text-slate-800 mb-2">비석 각인/발주 현황</h2>
+             <p className="text-slate-500 font-bold">DB 매핑 작업 대기중...</p>
           </div>
        )
     }
 
     function ContactsWorkspace() {
-       const [contacts, setContacts] = useState([]);
-       const [modal, setModal] = useState({ isOpen: false, data: null });
-
-       const fetchContacts = async () => {
-           try {
-               const res = await supabaseClient.from('contacts').select('*').order('company_name', {ascending: true});
-               if(res.data) setContacts(res.data);
-           } catch(e) {}
-       };
-       useEffect(() => { fetchContacts(); }, []);
-
-       const saveContact = async (e) => {
-           e.preventDefault();
-           const payload = { company_name: e.target.c_comp.value, manager_name: e.target.c_name.value, phone1: e.target.c_phone.value, job_type: e.target.c_role.value };
-           let err;
-           if(modal.data?.id) {
-               const res = await supabaseClient.from('contacts').update(payload).eq('id', modal.data.id); err = res.error;
-           } else {
-               const res = await supabaseClient.from('contacts').insert(payload); err = res.error;
-           }
-           if(err) { alert("저장 실패: " + err.message); return; }
-           setModal({isOpen:false, data:null});
-           fetchContacts();
-       };
-
        return (
-          <div className="bg-white p-4 sm:p-8 rounded-2xl shadow border border-slate-200 min-h-[50vh] w-full mt-4 mb-10">
-             <div className="flex justify-between items-center mb-6 border-b pb-4">
-                <h2 className="text-xl sm:text-2xl font-black text-slate-800">📞 통합 주소록</h2>
-                <button onClick={() => setModal({isOpen:true, data:null})} className="px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg shadow text-sm hover:bg-emerald-700 transition">+ 연락처 추가</button>
-             </div>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 {contacts.length === 0 ? <p className="col-span-2 text-center text-slate-400 py-10 font-bold">등록된 연락처가 없습니다.</p> : contacts.map(c => (
-                     <div key={c.id} onClick={()=>setModal({isOpen:true, data:c})} className="p-4 border border-emerald-100 bg-emerald-50/30 rounded-xl flex justify-between items-center cursor-pointer hover:bg-emerald-50 transition shadow-sm">
-                         <div>
-                             <div className="text-[10px] font-black text-emerald-600">{c.job_type || '협력사'}</div>
-                             <div className="font-black text-slate-800 text-lg mt-0.5">{c.company_name} <span className="text-sm font-medium text-slate-500 ml-1">{c.manager_name}</span></div>
-                             <div className="text-xs font-bold text-slate-600 mt-1">{c.phone1}</div>
-                         </div>
-                         <a href={`tel:${c.phone1}`} onClick={(e)=>e.stopPropagation()} className="bg-white border border-emerald-200 text-emerald-600 p-3 rounded-full hover:bg-emerald-100 transition shadow-sm">📞</a>
-                     </div>
-                 ))}
-             </div>
-
-             <Modal isOpen={modal.isOpen} onClose={()=>setModal({isOpen:false, data:null})} title={modal.data ? "연락처 수정" : "새 연락처 추가"} isNested={true}>
-                 <form onSubmit={saveContact} className="space-y-4">
-                     <div className="input-group"><label className="form-label">업체명 (소속)</label><input name="c_comp" type="text" className="form-input" defaultValue={modal.data?.company_name} required /></div>
-                     <div className="input-group"><label className="form-label">담당자명</label><input name="c_name" type="text" className="form-input" defaultValue={modal.data?.manager_name} /></div>
-                     <div className="input-group"><label className="form-label">연락처</label><input name="c_phone" type="text" className="form-input" defaultValue={modal.data?.phone1} required /></div>
-                     <div className="input-group"><label className="form-label">역할/비고</label><input name="c_role" type="text" className="form-input" defaultValue={modal.data?.job_type} placeholder="조경업체, 장례지도사 등" /></div>
-                     <div className="flex gap-2 pt-2">
-                         <button type="submit" className="w-full py-3 bg-emerald-600 text-white font-black rounded-xl text-sm hover:bg-emerald-700 shadow-lg">DB 저장</button>
-                     </div>
-                 </form>
-             </Modal>
+          <div className="bg-white p-8 rounded-2xl shadow border border-slate-200 text-center min-h-[50vh] flex flex-col justify-center items-center mt-4">
+             <div className="text-4xl mb-4">📞</div>
+             <h2 className="text-2xl font-black text-slate-800 mb-2">통합 연락처 (주소록)</h2>
+             <p className="text-slate-500 font-bold">DB 매핑 작업 대기중...</p>
           </div>
        )
     }
 
+    // ⚙️ Main Application Controller
     function App() {
       const [activeTab, setActiveTab] = useState('dash');
       const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 1024);
@@ -1378,6 +1254,7 @@
       }, []);
 
       useEffect(() => {
+        // 비동기 JSON 로딩 (절대 하얀화면 안 생김)
         fetch('/map_layout.json')
           .then(res => res.json())
           .then(json => setLayoutData(json))
@@ -1390,7 +1267,7 @@
           
           <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 border-r border-slate-800 text-slate-300 transform transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:hidden'} flex flex-col shadow-2xl lg:shadow-none`}>
             <div className="p-6 border-b border-slate-800 flex justify-between items-center shrink-0">
-              <h1 className="text-xl font-black text-white tracking-tighter">JAKE WorkOS <span className="text-[10px] bg-emerald-500 px-1.5 py-0.5 rounded ml-1 text-slate-900">V37</span></h1>
+              <h1 className="text-xl font-black text-white tracking-tighter">JAKE WorkOS <span className="text-[10px] bg-emerald-500 px-1.5 py-0.5 rounded ml-1 text-slate-900">V38</span></h1>
               <button className="lg:hidden text-slate-400 hover:text-white transition font-bold" onClick={() => setIsSidebarOpen(false)}>✕</button>
             </div>
             <nav className="p-4 space-y-8 overflow-y-auto flex-1 no-scrollbar">
