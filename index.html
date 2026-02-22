@@ -1367,9 +1367,11 @@
                                      <span className="text-slate-400 text-sm font-black w-4 text-center">{expandedFolders[folder.contract] ? '▲' : '▼'}</span>
                                  </div>
                              </div>
+                             {/* CSS 가리기 방식 (Lag Zero) */}
                              <div className={`p-4 bg-slate-50 border-t border-slate-200 space-y-2 ${expandedFolders[folder.contract] ? 'block' : 'hidden'}`}>
-                                     {folder.items.map(item => (
-                                         <div key={item.uid} onClick={()=>setModal({isOpen:true, data:item})} className="flex justify-between items-center p-3 bg-white border border-slate-200 rounded-xl hover:border-blue-400 hover:shadow-md cursor-pointer transition">
+                                     {/* ✅ [Fix] 고인명 증발 방지: item.uid 대신 index와 고인명을 결합한 절대 고유키 사용 */}
+                                     {folder.items.map((item, idx) => (
+                                         <div key={`${folder.contract}-${item.고인명}-${idx}`} onClick={()=>setModal({isOpen:true, data:item})} className="flex justify-between items-center p-3 bg-white border border-slate-200 rounded-xl hover:border-blue-400 hover:shadow-md cursor-pointer transition">
                                              <div>
                                                 <span className="font-black text-slate-800 text-[15px]">{item.고인명}</span> 
                                                 <span className="text-xs text-blue-600 font-bold ml-2 bg-blue-50 px-2 py-0.5 rounded">{item.상세좌표}</span>
