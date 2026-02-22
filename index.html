@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Jake WorkOS V48 - Engraving Master</title>
-  
+  <title>Jake WorkOS V49 - Bulletproof Engine</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -12,7 +11,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
-
   <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
     body { font-family: 'Pretendard', sans-serif; background-color: #f1f5f9; color: #1e293b; -webkit-font-smoothing: antialiased; }
@@ -24,22 +22,18 @@
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     .custom-scrollbar::-webkit-scrollbar { display: block; height: 6px; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
-    
     .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background-color: #e2e8f0; border: 1px solid #e2e8f0; }
     .calendar-cell { min-height: 120px; background-color: #fff; padding: 4px; cursor: pointer; transition: background-color 0.2s; position: relative; }
     .calendar-cell:hover { background-color: #f8fafc; }
     .calendar-cell:active { background-color: #f1f5f9; }
-    
     .modal-enter { animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
     @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
-
     .map-row { display: flex; flex-direction: row; justify-content: flex-start; gap: 4px; margin-bottom: 4px; width: max-content; }
     .map-slot { width: 85px; min-width: 85px; height: 70px; border-radius: 4px; border: 1px solid #cbd5e1; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; transition: transform 0.1s; }
     .map-slot:active { opacity: 0.7; transform: scale(0.95); }
     .slot-spacer { visibility: hidden; pointer-events: none; border: none; background: transparent; } 
     .slot-id { font-size: 10px; font-weight: 800; margin-bottom: 2px; }
     .slot-name { font-size: 11px; font-weight: 800; text-align: center; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 2px; letter-spacing: -0.5px; }
-
     .form-input { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; font-weight: bold; color: #1e293b; outline: none; transition: border-color 0.2s; background-color: #f8fafc; }
     .form-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); background-color: #ffffff; }
     .form-label { display: block; font-size: 11px; font-weight: 900; color: #64748b; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -57,8 +51,17 @@
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     const clean = (val) => (!val || val === '0.0' || val === '0' || val === 'null' || val === ' -  - ' || val === 'SPACER') ? '' : String(val).trim();
+    
+    // ✅ 방탄 처리: "null" 글자를 진짜 빈칸으로 치환
+    const cleanDbString = (val) => {
+        if(!val) return null;
+        const c = String(val).trim();
+        if(c === '' || c.toLowerCase() === 'null') return null;
+        return c;
+    };
+
     const normalizeDate = (v) => { 
-      if(!v) return null; 
+      if(!v || String(v).toLowerCase() === 'null') return null; 
       try {
         const s = String(v).replace(/\./g,'-').replace(/\s/g,'').substring(0,10);
         const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
@@ -66,12 +69,6 @@
       } catch(e) { return null; }
     };
     
-    // 빈 값을 DB가 인식할 수 있는 순수 null로 치환해주는 함수 (에러 방지 핵심)
-    const nullIfEmpty = (val) => {
-        const c = String(val).trim();
-        return c === '' ? null : c;
-    };
-
     const getNowStr = () => {
         const d = new Date();
         return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
@@ -102,7 +99,7 @@
       constructor(props) { super(props); this.state = { hasError: false, error: null }; }
       static getDerivedStateFromError(error) { return { hasError: true, error }; }
       render() {
-        if (this.state.hasError) return ( <div className="p-8 m-4 bg-rose-50 border-2 border-rose-500 rounded-xl shadow-lg"><h1 className="text-xl font-black text-rose-700 mb-2">🚨 V48 렌더링 에러</h1><pre className="text-xs bg-white p-4 rounded border border-rose-200 overflow-auto">{this.state.error?.toString()}</pre></div> );
+        if (this.state.hasError) return ( <div className="p-8 m-4 bg-rose-50 border-2 border-rose-500 rounded-xl shadow-lg"><h1 className="text-xl font-black text-rose-700 mb-2">🚨 V49 렌더링 에러</h1><pre className="text-xs bg-white p-4 rounded border border-rose-200 overflow-auto">{this.state.error?.toString()}</pre></div> );
         return this.props.children; 
       }
     }
@@ -137,7 +134,7 @@
         if(!isOpen) return;
         const fetchField = async () => {
           setLoading(true);
-          try { const res = await supabaseClient.from('field_data').select('위치_번호, 계약_상태, 성함').eq('구역', area); setData(res.data || []); } catch(e) {}
+          try { const res = await supabaseClient.from('field_data').select('위치_번호, 계약_상태, 성함').eq('구역', area).limit(10000); setData(res.data || []); } catch(e) {}
           setLoading(false);
         };
         fetchField();
@@ -219,7 +216,6 @@
       const [mapSelectorOpen, setMapSelectorOpen] = useState(false);
       const [selectedLocBase, setSelectedLocBase] = useState('');
       const [gwangjung, setGwangjung] = useState('');
-      
       const [globalSearch, setGlobalSearch] = useState('');
       const [salesSearch, setSalesSearch] = useState('');
 
@@ -227,9 +223,9 @@
         setLoading(true);
         try {
           const [burRes, salRes, hrRes] = await Promise.all([
-            supabaseClient.from('burial_schedule').select('*'),
-            supabaseClient.from('status_mgmt').select('*'),
-            supabaseClient.from('hr_management').select('*')
+            supabaseClient.from('burial_schedule').select('*').limit(10000),
+            supabaseClient.from('status_mgmt').select('*').limit(10000),
+            supabaseClient.from('hr_management').select('*').limit(10000)
           ]);
           const bEvs = (burRes.data || []).map(b => ({ id: b.id, type:'burial', date:normalizeDate(b.안치일), title:clean(b.고인명), sub:clean(b.위치), raw:b }));
           const sEvs = (salRes.data || []).map(s => {
@@ -266,9 +262,7 @@
         return days;
       }, [currentDate, events]);
 
-      const getCleanedHR = (data) => {
-        let map = {}; data.forEach(r => { if(r.work_date && r.worker_name) map[`${r.work_date}_${r.worker_name}`] = r.status; }); return map;
-      };
+      const getCleanedHR = (data) => { let map = {}; data.forEach(r => { if(r.work_date && r.worker_name) map[`${r.work_date}_${r.worker_name}`] = r.status; }); return map; };
 
       const headlineStats = useMemo(() => {
         const targetDate = dailyModal.isOpen ? dailyModal.dateStr : getTodayStr();
@@ -280,10 +274,7 @@
         const cln = getCleanedHR(hrData);
         EMPLOYEES.forEach(emp => {
             const st = cln[`${targetDate}_${emp}`];
-            if(st) {
-                if(['휴무','연차','병가'].includes(st)) hrCount += 1;
-                else if(['반차','오전반차','오후반차','조퇴'].includes(st)) hrCount += 0.5;
-            }
+            if(st) { if(['휴무','연차','병가'].includes(st)) hrCount += 1; else if(['반차','오전반차','오후반차','조퇴'].includes(st)) hrCount += 0.5; }
         });
         return { targetDate, burials, sales, hr: hrCount };
       }, [events, hrData, dailyModal.isOpen, dailyModal.dateStr]);
@@ -321,10 +312,7 @@
       const saveSchedule = async (e) => {
           e.preventDefault();
           const targetLoc = gwangjung ? `${selectedLocBase}[${gwangjung}]` : selectedLocBase;
-          const payload = {
-              안치일: nullIfEmpty(e.target.sch_date.value), 계약번호: nullIfEmpty(e.target.sch_no.value), 고인명: nullIfEmpty(e.target.sch_name.value),
-              계약자: nullIfEmpty(e.target.sch_contractor.value), 위치: nullIfEmpty(targetLoc), 비고: nullIfEmpty(e.target.sch_note.value)
-          };
+          const payload = { 안치일: cleanDbString(e.target.sch_date.value), 계약번호: cleanDbString(e.target.sch_no.value), 고인명: cleanDbString(e.target.sch_name.value), 계약자: cleanDbString(e.target.sch_contractor.value), 위치: cleanDbString(targetLoc), 비고: cleanDbString(e.target.sch_note.value) };
           let err;
           if(schModal.data?.id) { const res = await supabaseClient.from('burial_schedule').update(payload).eq('id', schModal.data.id); err = res.error; } 
           else { const res = await supabaseClient.from('burial_schedule').insert(payload); err = res.error; }
@@ -345,11 +333,11 @@
       const saveSales = async (e) => {
           e.preventDefault();
           const payload = {
-              등록일: e.target.s_regDate.value || getNowStr(), 답사일: nullIfEmpty(e.target.s_visitDate.value),
-              영업자사명: nullIfEmpty(e.target.s_corp.value), 영업자성함: nullIfEmpty(e.target.s_staff.value),
-              고객_고인_명: nullIfEmpty(e.target.s_customer.value), 연락처: nullIfEmpty(e.target.s_phone.value),
-              계약구분: nullIfEmpty(e.target.s_type.value), 현재상태: nullIfEmpty(e.target.s_status.value),
-              안치확정일: nullIfEmpty(e.target.s_confirmDate.value), 비고메모: nullIfEmpty(e.target.s_memo.value)
+              등록일: e.target.s_regDate.value || getNowStr(), 답사일: cleanDbString(e.target.s_visitDate.value),
+              영업자사명: cleanDbString(e.target.s_corp.value), 영업자성함: cleanDbString(e.target.s_staff.value),
+              고객_고인_명: cleanDbString(e.target.s_customer.value), 연락처: cleanDbString(e.target.s_phone.value),
+              계약구분: cleanDbString(e.target.s_type.value), 현재상태: cleanDbString(e.target.s_status.value),
+              안치확정일: cleanDbString(e.target.s_confirmDate.value), 비고메모: cleanDbString(e.target.s_memo.value)
           };
           let err;
           if(salesModal.data?.id) { const res = await supabaseClient.from('status_mgmt').update(payload).eq('id', salesModal.data.id); err = res.error; } 
@@ -370,7 +358,6 @@
 
       return (
         <div className="space-y-6 max-w-7xl mx-auto flex flex-col relative w-full">
-          
           <div onClick={() => handleCellClick(getTodayStr())} className="bg-slate-800 rounded-2xl p-4 shadow-lg text-white flex justify-between items-center cursor-pointer hover:bg-slate-700 transition">
             <div>
               <p className="text-xs font-bold text-slate-400 mb-1">{headlineStats.targetDate === getTodayStr() ? 'TODAY SUMMARY' : `SUMMARY: ${headlineStats.targetDate}`}</p>
@@ -380,20 +367,16 @@
                 <div className="flex items-end gap-1"><span className="text-2xl font-black text-blue-400">{headlineStats.hr}</span><span className="text-sm font-bold text-slate-300 pb-1">휴무</span></div>
               </div>
             </div>
-            <div className="hidden sm:block text-right">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Jake WorkOS</p>
-              <p className="text-sm font-black text-emerald-400">DATABASE ACTIVE</p>
-            </div>
+            <div className="hidden sm:block text-right"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Jake WorkOS</p><p className="text-sm font-black text-emerald-400">DATABASE ACTIVE</p></div>
           </div>
 
           <div className="bg-white rounded-2xl shadow border border-slate-200 flex flex-col overflow-hidden">
-            
             <div className="p-3 border-b border-slate-100 bg-slate-50 relative z-[95]">
                 <input type="text" placeholder="🔍 모든 일정 딥 서치 (안치자, 고객명, 연락처, 비고...)" value={globalSearch} onChange={e=>setGlobalSearch(e.target.value)} className="w-full p-2.5 rounded-xl border border-slate-300 shadow-inner text-sm font-bold focus:border-blue-500 focus:outline-none bg-white" />
                 {globalSearchResults.length > 0 && (
                      <div className="absolute top-full left-0 w-full bg-white border border-slate-200 shadow-2xl rounded-xl mt-1 max-h-80 overflow-y-auto custom-scrollbar">
                          {globalSearchResults.map(ev => (
-                             <div key={ev.id} onClick={() => { handleCellClick(ev.date); }} className="p-3 border-b hover:bg-blue-50 cursor-pointer transition">
+                             <div key={ev.id} onClick={() => handleCellClick(ev.date)} className="p-3 border-b hover:bg-blue-50 cursor-pointer transition">
                                  <div className="flex justify-between items-center mb-1">
                                      <span className="font-black text-slate-800">{ev.title} <span className="text-slate-500 text-xs font-bold ml-1">({ev.sub})</span></span>
                                      <span className={`text-[10px] px-2 py-0.5 rounded font-black ${ev.type==='burial'?'bg-emerald-100 text-emerald-700':'bg-amber-100 text-amber-700'}`}>{ev.type==='burial'?'안치':'영업'} {ev.status}</span>
@@ -500,14 +483,8 @@
 
           <Modal isOpen={salesModal.isOpen} onClose={()=>setSalesModal({isOpen:false, data:null})} title={salesModal.data ? "🟡 영업 현황 수정" : "📝 영업 현황 신규 등록"} isNested={true}>
               <form onSubmit={saveSales} className="space-y-4">
-                  <div className="input-group">
-                      <label className="form-label">등록 일시 (시간 포함)</label>
-                      <input name="s_regDate" type="text" className="form-input bg-yellow-50 text-red-600" defaultValue={salesModal.data?.raw?.등록일 || ''} placeholder="빈칸 시 현재 시간 자동 기록" />
-                  </div>
-                  <div className="input-group">
-                      <label className="form-label">답사 예정일</label>
-                      <input name="s_visitDate" type="date" className="form-input" defaultValue={normalizeDate(salesModal.data?.raw?.답사일) || (dailyModal.isOpen ? dailyModal.dateStr : '')} />
-                  </div>
+                  <div className="input-group"><label className="form-label">등록 일시 (시간 포함)</label><input name="s_regDate" type="text" className="form-input bg-yellow-50 text-red-600" defaultValue={salesModal.data?.raw?.등록일 || ''} placeholder="빈칸 시 현재 시간 자동 기록" /></div>
+                  <div className="input-group"><label className="form-label">답사 예정일</label><input name="s_visitDate" type="date" className="form-input" defaultValue={normalizeDate(salesModal.data?.raw?.답사일) || (dailyModal.isOpen ? dailyModal.dateStr : '')} /></div>
                   <div className="grid grid-cols-2 gap-3">
                       <div><label className="form-label">사명</label><input name="s_corp" type="text" className="form-input" defaultValue={clean(salesModal.data?.raw?.영업자사명) || ''} required /></div>
                       <div><label className="form-label">영업자</label><input name="s_staff" type="text" className="form-input" defaultValue={clean(salesModal.data?.raw?.영업자성함) || ''} required /></div>
@@ -560,7 +537,6 @@
       );
     }
 
-    // 📈 MODULE 4: Stats View
     function StatsView() {
       const [events, setEvents] = useState([]);
       const [currentDate, setCurrentDate] = useState(new Date());
@@ -571,7 +547,7 @@
       useEffect(() => {
         const fetchEvents = async () => {
           try {
-            const burRes = await supabaseClient.from('burial_schedule').select('*');
+            const burRes = await supabaseClient.from('burial_schedule').select('*').limit(10000);
             const bEvs = (burRes.data || []).map(b => ({ id: b.id, type:'burial', date:normalizeDate(b.안치일), raw:b }));
             setEvents(bEvs);
           } catch(e) {}
@@ -674,7 +650,6 @@
       );
     }
 
-    // 🧩 MODULE 5: HrView
     function HrView() {
       const [loading, setLoading] = useState(true);
       const [hrData, setHrData] = useState([]);
@@ -687,7 +662,7 @@
       const fetchHRAndEvents = async () => {
         setLoading(true);
         try {
-          const [hrRes, burRes, salRes] = await Promise.all([ supabaseClient.from('hr_management').select('*'), supabaseClient.from('burial_schedule').select('안치일'), supabaseClient.from('status_mgmt').select('답사일, 현재상태') ]);
+          const [hrRes, burRes, salRes] = await Promise.all([ supabaseClient.from('hr_management').select('*').limit(10000), supabaseClient.from('burial_schedule').select('안치일').limit(10000), supabaseClient.from('status_mgmt').select('답사일, 현재상태').limit(10000) ]);
           let cleanHr = (hrRes.data || []).map(r => {
              let d = r.work_date; let n = r.worker_name;
              if(d && n && (d.includes('과장') || d.includes('팀장') || d.includes('실장') || d.includes('사무장') || d.includes('차장'))) { let temp = d; d = n; n = temp; }
@@ -820,7 +795,6 @@
       );
     }
 
-    // 🧩 MODULE 6: FieldView
     function FieldView({ layoutData }) {
       const [loading, setLoading] = useState(true);
       const [data, setData] = useState([]);
@@ -833,7 +807,7 @@
       useEffect(() => {
         const fetchField = async () => {
           setLoading(true);
-          try { const [areaRes, allRes] = await Promise.all([ supabaseClient.from('field_data').select('*').eq('구역', area), supabaseClient.from('field_data').select('*') ]); setData(areaRes.data || []); setAllFieldData(allRes.data || []); } catch(e) {}
+          try { const [areaRes, allRes] = await Promise.all([ supabaseClient.from('field_data').select('*').eq('구역', area).limit(10000), supabaseClient.from('field_data').select('*').limit(10000) ]); setData(areaRes.data || []); setAllFieldData(allRes.data || []); } catch(e) {}
           setLoading(false);
         };
         fetchField();
@@ -866,14 +840,14 @@
 
       const saveField = async (e) => {
           e.preventDefault();
-          const payload = { 구역: area, 위치_번호: slotModal.data.위치_번호, 성함: nullIfEmpty(e.target.f_name.value), 계약_상태: nullIfEmpty(e.target.f_status.value), 계약자: nullIfEmpty(e.target.f_contractor.value), 기수: nullIfEmpty(e.target.f_units.value), 가격: formatMoney(e.target.f_price.value).replace(/[^0-9]/g, ""), 관리비: formatMoney(e.target.f_fee.value).replace(/[^0-9]/g, ""), 메모: nullIfEmpty(e.target.f_memo.value) };
+          const payload = { 구역: area, 위치_번호: slotModal.data.위치_번호, 성함: cleanDbString(e.target.f_name.value), 계약_상태: cleanDbString(e.target.f_status.value), 계약자: cleanDbString(e.target.f_contractor.value), 기수: cleanDbString(e.target.f_units.value), 가격: formatMoney(e.target.f_price.value).replace(/[^0-9]/g, ""), 관리비: formatMoney(e.target.f_fee.value).replace(/[^0-9]/g, ""), 메모: cleanDbString(e.target.f_memo.value) };
           let err;
           if(slotModal.data?.id) { const res = await supabaseClient.from('field_data').update(payload).eq('id', slotModal.data.id); err = res.error; } 
           else { const res = await supabaseClient.from('field_data').insert(payload); err = res.error; }
           if(err) { alert(`저장 실패: ${err.message}`); return; }
           logAction('현장관리', '수정', `${area} ${slotModal.data.위치_번호}`, `상태: ${payload.계약_상태}`);
           setSlotModal({isOpen:false, data:null}); setLoading(true);
-          const [areaRes, allRes] = await Promise.all([ supabaseClient.from('field_data').select('*').eq('구역', area), supabaseClient.from('field_data').select('*') ]);
+          const [areaRes, allRes] = await Promise.all([ supabaseClient.from('field_data').select('*').eq('구역', area).limit(10000), supabaseClient.from('field_data').select('*').limit(10000) ]);
           setData(areaRes.data || []); setAllFieldData(allRes.data || []); setLoading(false);
       };
 
@@ -944,19 +918,18 @@
       );
     }
 
-    // 🧩 MODULE 7: JAKE WORKSPACE
     function ProjectsWorkspace() {
        const [projects, setProjects] = useState([]);
        const [modal, setModal] = useState({ isOpen: false, data: null, activeTab: 'info' });
 
        const fetchProjects = async () => {
-           try { const res = await supabaseClient.from('project_db').select('*').order('id', {ascending: false}); if(res.data) setProjects(res.data); } catch(e) {}
+           try { const res = await supabaseClient.from('project_db').select('*').order('id', {ascending: false}).limit(10000); if(res.data) setProjects(res.data); } catch(e) {}
        };
        useEffect(() => { fetchProjects(); }, []);
 
        const saveProject = async (e) => {
            e.preventDefault();
-           const payload = { title: nullIfEmpty(e.target.p_title.value), personnel: nullIfEmpty(e.target.p_manager.value), end_date: nullIfEmpty(e.target.p_deadline.value), status: nullIfEmpty(e.target.p_status.value) };
+           const payload = { title: cleanDbString(e.target.p_title.value), personnel: cleanDbString(e.target.p_manager.value), end_date: cleanDbString(e.target.p_deadline.value), status: cleanDbString(e.target.p_status.value) };
            let err;
            if(modal.data?.id) { const res = await supabaseClient.from('project_db').update(payload).eq('id', modal.data.id); err = res.error; } 
            else { payload.id = 'proj-' + Date.now(); const res = await supabaseClient.from('project_db').insert(payload); err = res.error; }
@@ -1040,10 +1013,10 @@
        const fetchData = async () => {
            try {
                const [mRes, iRes, bRes, sRes] = await Promise.all([
-                   supabaseClient.from('meeting_logs').select('*').order('meeting_date', {ascending: false}),
-                   supabaseClient.from('issue_db').select('*'),
-                   supabaseClient.from('burial_schedule').select('*'),
-                   supabaseClient.from('status_mgmt').select('*')
+                   supabaseClient.from('meeting_logs').select('*').order('meeting_date', {ascending: false}).limit(10000),
+                   supabaseClient.from('issue_db').select('*').limit(10000),
+                   supabaseClient.from('burial_schedule').select('*').limit(10000),
+                   supabaseClient.from('status_mgmt').select('*').limit(10000)
                ]);
                if(mRes.data) setMinutes(mRes.data);
                if(iRes.data) setIssues(iRes.data);
@@ -1063,7 +1036,7 @@
 
        const saveMinute = async (e) => {
            e.preventDefault();
-           const payload = { meeting_date: nullIfEmpty(e.target.m_date.value), topic: nullIfEmpty(e.target.m_title.value), content: nullIfEmpty(e.target.m_content.value), participants: nullIfEmpty(e.target.m_part.value), weather: nullIfEmpty(e.target.m_wea.value) };
+           const payload = { meeting_date: cleanDbString(e.target.m_date.value), topic: cleanDbString(e.target.m_title.value), content: cleanDbString(e.target.m_content.value), participants: cleanDbString(e.target.m_part.value), weather: cleanDbString(e.target.m_wea.value) };
            if(modal.data?.id) await supabaseClient.from('meeting_logs').update(payload).eq('id', modal.data.id);
            else await supabaseClient.from('meeting_logs').insert(payload);
            setModal({isOpen:false, data:null}); fetchData();
@@ -1162,25 +1135,24 @@
        )
     }
 
-    // ✅ 각인 현황 (딥 서치 & 빈 날짜 에러 & 폴더 깨짐 완벽 픽스)
+    // ✅ 각인 현황 (DB 리미트 무제한 & 절대 고유키 적용)
     function EngravingWorkspace() {
        const [engravings, setEngravings] = useState([]);
        const [modal, setModal] = useState({ isOpen: false, data: null });
        const [viewMode, setViewMode] = useState('folder'); 
        const [currentDate, setCurrentDate] = useState(new Date());
        
-       // ✅ 각인 현황 전용 딥 서치
        const [engSearch, setEngSearch] = useState('');
 
        const fetchEngravings = async () => {
            try {
-               const res = await supabaseClient.from('engraving_mgmt').select('*');
+               // ✅ [Fix] 1000줄 제한 해제 (limit 10000 부여)
+               const res = await supabaseClient.from('engraving_mgmt').select('*').limit(10000);
                if(res.data) setEngravings(res.data.filter(e => e.고인명 && String(e.고인명).trim() !== ''));
            } catch(e) {}
        };
        useEffect(() => { fetchEngravings(); }, []);
 
-       // 검색 필터링 
        const filteredEngravings = useMemo(() => {
            if(!engSearch.trim()) return engravings;
            const q = engSearch.toLowerCase();
@@ -1193,7 +1165,6 @@
            );
        }, [engravings, engSearch]);
 
-       // ✅ [Fix] 띄어쓰기 무시를 위해 키값을 공백 없이 세팅, 알 수 없는 값은 1순위로 방어
        const statusWeight = { '접수': 1, '디자인완료': 2, '각인완료': 3, '설치완료': 4 };
 
        const folderList = useMemo(() => {
@@ -1203,23 +1174,19 @@
            }, {});
            
            const result = Object.entries(grouped).map(([contract, items]) => {
-               // 띄어쓰기를 없애고 가중치 검색, 못 찾으면 무조건 제일 급한 1(접수)로 취급하여 증발 방지
+               // 띄어쓰기 무시 후 가중치 적용
                const highestUrgency = Math.min(...items.map(i => {
                    const cleanStatus = String(i.상태 || '').replace(/\s/g, '');
                    return statusWeight[cleanStatus] || 1; 
                }));
-               
-               // 최고 우선순위에 해당하는 문자열 복원
                const repStatus = Object.keys(statusWeight).find(k => statusWeight[k] === highestUrgency) || '접수';
                const isDone = highestUrgency === 4;
                const earliestDate = items.reduce((min, i) => (!min || (i.안치_예정_일 && i.안치_예정_일 < min)) ? i.안치_예정_일 : min, null);
                
-               // 폴더 내 고인 정렬 (안치일 기준)
                items.sort((a,b) => new Date(b.안치_예정_일||0) - new Date(a.안치_예정_일||0));
                return { contract, items, isDone, repStatus, highestUrgency, earliestDate };
            });
            
-           // 전체 폴더 정렬 (우선순위 -> 안치일 기준)
            result.sort((a,b) => {
                if(a.highestUrgency !== b.highestUrgency) return a.highestUrgency - b.highestUrgency;
                return new Date(b.earliestDate||0) - new Date(a.earliestDate||0);
@@ -1276,33 +1243,22 @@
 
        const saveEngraving = async (e) => {
            e.preventDefault();
-           // ✅ [에러 픽스] 날짜에 빈칸("")이 들어갈 경우 Postgres DB 에러를 막기 위해 철저한 null 처리
+           // ✅ [에러 픽스] 문자열 "null" 방어. cleanDbString 함수 사용
            const payload = { 
-               안치_예정_일: e.target.e_an_date.value ? e.target.e_an_date.value : null, 
-               상세좌표: e.target.e_loc.value || null, 
-               고인명: e.target.e_name.value || null, 
-               생년월일: e.target.e_birth.value ? e.target.e_birth.value : null, 
-               생_음양: e.target.e_birth_type.value || null,
-               졸년월일: e.target.e_death.value ? e.target.e_death.value : null, 
-               졸_음양: e.target.e_death_type.value || null,
-               계약자: e.target.e_contractor.value || null, 
-               규격: e.target.e_stone.value || null, 
-               상태: e.target.e_status.value || null,
-               광중위치: e.target.e_gwang.value || null, 
-               종교: e.target.e_rel.value || null, 
-               표기: e.target.e_mark.value || null, 
-               비고: e.target.e_memo.value || null, 
-               계약번호: e.target.e_contractNo.value || null,
-               신청서: e.target.e_form.value || null, 
-               각인: e.target.e_print.value || null
+               안치_예정_일: cleanDbString(e.target.e_an_date.value), 상세좌표: cleanDbString(e.target.e_loc.value), 고인명: cleanDbString(e.target.e_name.value), 
+               생년월일: cleanDbString(e.target.e_birth.value), 생_음양: cleanDbString(e.target.e_birth_type.value),
+               졸년월일: cleanDbString(e.target.e_death.value), 졸_음양: cleanDbString(e.target.e_death_type.value),
+               계약자: cleanDbString(e.target.e_contractor.value), 규격: cleanDbString(e.target.e_stone.value), 상태: cleanDbString(e.target.e_status.value),
+               광중위치: cleanDbString(e.target.e_gwang.value), 종교: cleanDbString(e.target.e_rel.value), 표기: cleanDbString(e.target.e_mark.value), 
+               비고: cleanDbString(e.target.e_memo.value), 계약번호: cleanDbString(e.target.e_contractNo.value),
+               신청서: cleanDbString(e.target.e_form.value), 각인: cleanDbString(e.target.e_print.value)
            };
            let err;
            
-           // ✅ [에러 픽스] 수정(Update) 시 기준 키를 명확히 세팅
            if(modal.data?.uid) { 
                const res = await supabaseClient.from('engraving_mgmt').update(payload).eq('uid', modal.data.uid); err = res.error; 
            } else { 
-               payload.uid = 'eng-' + Date.now(); // 새 고유 ID 부여
+               payload.uid = 'eng-' + Date.now(); 
                const res = await supabaseClient.from('engraving_mgmt').insert(payload); err = res.error; 
            }
            
@@ -1367,9 +1323,8 @@
                                      <span className="text-slate-400 text-sm font-black w-4 text-center">{expandedFolders[folder.contract] ? '▲' : '▼'}</span>
                                  </div>
                              </div>
-                             {/* CSS 가리기 방식 (Lag Zero) */}
                              <div className={`p-4 bg-slate-50 border-t border-slate-200 space-y-2 ${expandedFolders[folder.contract] ? 'block' : 'hidden'}`}>
-                                     {/* ✅ [Fix] 고인명 증발 방지: item.uid 대신 index와 고인명을 결합한 절대 고유키 사용 */}
+                                     {/* ✅ [Fix] 고유키 부여로 증발 완전 방지 */}
                                      {folder.items.map((item, idx) => (
                                          <div key={`${folder.contract}-${item.고인명}-${idx}`} onClick={()=>setModal({isOpen:true, data:item})} className="flex justify-between items-center p-3 bg-white border border-slate-200 rounded-xl hover:border-blue-400 hover:shadow-md cursor-pointer transition">
                                              <div>
@@ -1377,7 +1332,7 @@
                                                 <span className="text-xs text-blue-600 font-bold ml-2 bg-blue-50 px-2 py-0.5 rounded">{item.상세좌표}</span>
                                                 <div className="text-[10px] text-slate-500 mt-1">안치예정: {item.안치_예정_일 || '미정'} | 규격: {item.규격||'미정'}</div>
                                              </div>
-                                             <span className={`text-xs font-black px-2.5 py-1 rounded ${statusCols[item.상태]||'bg-slate-100'}`}>{item.상태}</span>
+                                             <span className={`text-xs font-black px-2.5 py-1 rounded ${statusCols[String(item.상태).replace(/\s/g,'')]||'bg-slate-100'}`}>{item.상태}</span>
                                          </div>
                                      ))}
                              </div>
@@ -1407,7 +1362,7 @@
                             <div className="space-y-1 pb-1">
                               {d.dayEvents.map((ev,idx)=>{
                                 const statusCols = { '접수':'bg-red-100 text-red-700', '디자인완료':'bg-amber-100 text-amber-700', '각인완료':'bg-blue-100 text-blue-700', '설치완료':'bg-slate-200 text-slate-500' };
-                                const st = statusCols[ev.상태] || 'bg-slate-100';
+                                const st = statusCols[String(ev.상태).replace(/\s/g,'')] || 'bg-slate-100';
                                 return <div key={idx} onClick={()=>setModal({isOpen:true, data:ev})} className={`px-1.5 py-0.5 rounded text-[10px] font-bold truncate shadow-sm cursor-pointer ${st}`}>{ev.고인명} ({ev.상태})</div>
                               })}
                             </div>
@@ -1492,7 +1447,7 @@
 
        const fetchContacts = async () => {
            try {
-               const res = await supabaseClient.from('contacts').select('*').order('company_name', {ascending: true});
+               const res = await supabaseClient.from('contacts').select('*').order('company_name', {ascending: true}).limit(10000);
                if(res.data) {
                    setContacts(res.data);
                    const tagSet = new Set();
@@ -1531,7 +1486,7 @@
 
        const saveContact = async (e) => {
            e.preventDefault();
-           const payload = { company_name: nullIfEmpty(e.target.c_comp.value), manager_name: nullIfEmpty(e.target.c_name.value), phone1: nullIfEmpty(e.target.c_phone.value), phone2: nullIfEmpty(e.target.c_phone2.value), job_type: tags.join(','), email: nullIfEmpty(e.target.c_email.value), url: nullIfEmpty(e.target.c_url.value), memo: nullIfEmpty(e.target.c_memo.value) };
+           const payload = { company_name: cleanDbString(e.target.c_comp.value), manager_name: cleanDbString(e.target.c_name.value), phone1: cleanDbString(e.target.c_phone.value), phone2: cleanDbString(e.target.c_phone2.value), job_type: tags.join(','), email: cleanDbString(e.target.c_email.value), url: cleanDbString(e.target.c_url.value), memo: cleanDbString(e.target.c_memo.value) };
            let err;
            if(modal.data?.id) { const res = await supabaseClient.from('contacts').update(payload).eq('id', modal.data.id); err = res.error; } 
            else { const res = await supabaseClient.from('contacts').insert(payload); err = res.error; }
@@ -1625,7 +1580,7 @@
           
           <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 border-r border-slate-800 text-slate-300 transform transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:hidden'} flex flex-col shadow-2xl lg:shadow-none`}>
             <div className="p-6 border-b border-slate-800 flex justify-between items-center shrink-0">
-              <h1 className="text-xl font-black text-white tracking-tighter">JAKE WorkOS <span className="text-[10px] bg-emerald-500 px-1.5 py-0.5 rounded ml-1 text-slate-900">V48</span></h1>
+              <h1 className="text-xl font-black text-white tracking-tighter">JAKE WorkOS <span className="text-[10px] bg-emerald-500 px-1.5 py-0.5 rounded ml-1 text-slate-900">V49</span></h1>
               <button className="lg:hidden text-slate-400 hover:text-white transition font-bold" onClick={() => setIsSidebarOpen(false)}>✕</button>
             </div>
             <nav className="p-4 space-y-8 overflow-y-auto flex-1 custom-scrollbar">
