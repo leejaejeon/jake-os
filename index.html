@@ -1054,12 +1054,10 @@
               <div>
                 <p className="text-[10px] font-black text-indigo-400 mb-3 ml-2 uppercase tracking-widest">Jake Personal</p>
                 <div className="space-y-1">
-                  <button onClick={() => {setActiveTab('dash'); if(window.innerWidth<1024)setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3 rounded-xl font-bold text-sm hover:bg-slate-800 transition`}>📝 회의록 관리</button>
-                  <button onClick={() => {setActiveTab('dash'); if(window.innerWidth<1024)setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3 rounded-xl font-bold text-sm hover:bg-slate-800 transition`}>⚰️ 각인/발주 현황</button>
+                  <button onClick={() => {setActiveTab('minutes'); if(window.innerWidth<1024)setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'minutes' ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-slate-800'}`}>📝 회의록 관리</button>
+                  <button onClick={() => {setActiveTab('engraving'); if(window.innerWidth<1024)setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'engraving' ? 'bg-stone-600 text-white shadow-lg' : 'hover:bg-slate-800'}`}>⚰️ 각인/발주 현황</button>
                 </div>
               </div>
-            </nav>
-          </aside>
 
           {/* 메인 뷰 스크롤 해방 */}
           <main className="flex-1 flex flex-col h-screen overflow-y-auto overflow-x-hidden bg-[#F8FAFC]">
@@ -1075,6 +1073,22 @@
               {activeTab === 'dash' && <DashboardView layoutData={layoutData} />}
               {activeTab === 'field' && <FieldView layoutData={layoutData} />}
               {activeTab === 'hr' && <HrView />}
+              
+              {/* ✅ Jake Personal Workspace 렌더링 구역 */}
+              {activeTab === 'minutes' && (
+                  <div className="bg-white p-8 rounded-2xl shadow border border-slate-200 text-center min-h-[50vh] flex flex-col justify-center items-center">
+                     <div className="text-4xl mb-4">📝</div>
+                     <h2 className="text-2xl font-black text-slate-800 mb-2">회의록 관리소</h2>
+                     <p className="text-slate-500 font-bold">경영진 및 현장 회의 요약 기록. (현재 DB 설계 중입니다)</p>
+                  </div>
+              )}
+              {activeTab === 'engraving' && (
+                  <div className="bg-white p-8 rounded-2xl shadow border border-slate-200 text-center min-h-[50vh] flex flex-col justify-center items-center">
+                     <div className="text-4xl mb-4">⚰️</div>
+                     <h2 className="text-2xl font-black text-slate-800 mb-2">각인 / 발주 자동화 시스템</h2>
+                     <p className="text-slate-500 font-bold">포토샵 배치 스크립트와 연동될 발주 데이터 관제소. (현재 DB 설계 중입니다)</p>
+                  </div>
+              )}
             </div>
           </main>
         </div>
