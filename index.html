@@ -725,7 +725,8 @@
           let warnings = [];
           if (cap.contract <= 1) warnings.push('계약');
           if (salesCount > 0 && cap.guide <= 2) warnings.push('안내');
-          if (burialCount > 0 && cap.burial <= 2) warnings.push('안치');
+          // ✅ 수정됨: 안치 일정이 4건 이상일 때만 경고
+          if (burialCount >= 4 && cap.burial <= 2) warnings.push('안치');
 
           days.push({ day: i, dateStr: ds, cap, warnings });
         }
