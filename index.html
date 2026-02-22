@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Jake WorkOS V36 - Statistics & Deletion Fix</title>
+  <title>Jake WorkOS V37 - Final Database Sync</title>
   
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -15,9 +15,7 @@
 
   <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
-    
     body { font-family: 'Pretendard', sans-serif; background-color: #f1f5f9; color: #1e293b; -webkit-font-smoothing: antialiased; }
-    
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-track { background: #f8fafc; border-radius: 4px; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; border: 2px solid #f8fafc; }
@@ -111,7 +109,7 @@
         if (this.state.hasError) {
           return (
             <div className="p-8 m-4 bg-rose-50 border-2 border-rose-500 rounded-xl shadow-lg">
-              <h1 className="text-xl font-black text-rose-700 mb-2">🚨 V36 렌더링 에러</h1>
+              <h1 className="text-xl font-black text-rose-700 mb-2">🚨 V37 렌더링 에러</h1>
               <pre className="text-xs bg-white p-4 rounded border border-rose-200 overflow-auto">{this.state.error?.toString()}</pre>
             </div>
           );
@@ -150,7 +148,7 @@
           try {
             const res = await supabaseClient.from('field_data').select('위치_번호, 계약_상태, 성함').eq('구역', area);
             setData(res.data || []);
-          } catch(e) { console.error(e); }
+          } catch(e) {}
           setLoading(false);
         };
         fetchField();
@@ -236,9 +234,6 @@
       );
     }
 
-    // ==========================================
-    // 📊 Dashboard View (일정 관리 전용)
-    // ==========================================
     function DashboardView({ layoutData }) {
       const [loading, setLoading] = useState(true);
       const [events, setEvents] = useState([]);
@@ -264,7 +259,7 @@
           ]);
           const bEvs = (burRes.data || []).map(b => ({ id: b.id, type:'burial', date:normalizeDate(b.안치일), title:clean(b.고인명), sub:clean(b.위치), raw:b }));
           const sEvs = (salRes.data || []).map(s => {
-            const custName = clean(s['고객(고인)명'] || s.고객_고인_명 || s.고객고인명 || s.고객명 || '이름없음');
+            const custName = clean(s['고객_고인_명'] || s['고객(고인)명'] || s.고객명 || '이름없음');
             return { id: s.id, type:'sales', date:normalizeDate(s.답사일)||normalizeDate(s.등록일), title:custName, sub:`${clean(s.영업자사명)}/${clean(s.영업자성함)}`, status:s.현재상태, raw:s, regDate: new Date(normalizeDate(s.등록일) || 0) };
           });
           setEvents([...bEvs, ...sEvs].filter(e => e.date !== null));
@@ -354,14 +349,12 @@
               const res = await supabaseClient.from('burial_schedule').insert(payload);
               err = res.error;
           }
-          
           if(err) { alert(`저장 실패: ${err.message}`); return; }
           logAction('안치일정', schModal.data ? '수정' : '신규등록', payload.고인명, `날짜: ${payload.안치일}`);
           setSchModal({isOpen:false, data:null});
           fetchAll(); 
       };
 
-      // ✅ 안치 일정 삭제 기능
       const deleteSchedule = async (id) => {
           if(confirm('이 안치 일정을 정말 삭제(보관)하시겠습니까?')) {
               const res = await supabaseClient.from('burial_schedule').delete().eq('id', id);
@@ -395,17 +388,14 @@
               const res = await supabaseClient.from('status_mgmt').insert(payload);
               err = res.error;
           }
-          
           if(err) {
-              alert(`🚨 DB 거부됨: ${err.message}\n[해결책] Supabase 'status_mgmt' 테이블의 '고객명' 컬럼을 '고객_고인_명' 으로 수정해주세요.`);
-              return;
+              alert(`🚨 DB 거부됨: ${err.message}`); return;
           }
           logAction('영업현황', salesModal.data ? '수정' : '신규등록', payload.고객_고인_명, `상태: ${payload.현재상태}`);
           setSalesModal({isOpen:false, data:null});
           fetchAll();
       };
 
-      // ✅ 영업 현황 삭제 기능
       const deleteSales = async (id) => {
           if(confirm('이 영업 일정을 정말 삭제(보관)하시겠습니까?')) {
               const res = await supabaseClient.from('status_mgmt').delete().eq('id', id);
@@ -452,7 +442,7 @@
               </button>
             </div>
 
-            <div className="bg-white p-2 md:p-4">
+            <div className="bg-white p-2 md:p-4 pb-6">
               <div className="w-full flex flex-col border border-slate-200 rounded-xl shadow-sm bg-slate-200 gap-px">
                 <div className="grid grid-cols-7 gap-px">
                   {['월','화','수','목','금','토','일'].map((d,i)=>(<div key={d} className={`py-2 text-center text-sm font-black bg-white ${i===6?'text-red-500':i===5?'text-blue-500':'text-slate-700'}`}>{d}</div>))}
@@ -619,7 +609,7 @@
       );
     }
 
-    // 📈 Stats View (분리된 통계 탭)
+    // 📈 Stats View (분리된 차트 영역)
     function StatsView() {
       const [events, setEvents] = useState([]);
       const [currentDate, setCurrentDate] = useState(new Date());
@@ -982,9 +972,6 @@
           if(slotModal.data?.id) {
               const res = await supabaseClient.from('field_data').update(payload).eq('id', slotModal.data.id);
               err = res.error;
-          } else if(slotModal.data?.raw) {
-              const res = await supabaseClient.from('field_data').update(payload).eq('구역', area).eq('위치_번호', slotModal.data.위치_번호);
-              err = res.error;
           } else {
               const res = await supabaseClient.from('field_data').insert(payload);
               err = res.error;
@@ -1092,46 +1079,44 @@
       );
     }
 
-    // 🚀 워크스페이스 모듈 (프로젝트, 회의록, 각인현황, 연락처)
+    // 🚀 워크스페이스 모듈 (DB 구조 최적화 매핑)
     function ProjectsWorkspace() {
        const [projects, setProjects] = useState([]);
-       
+       const [modal, setModal] = useState({ isOpen: false, data: null });
+
        const fetchProjects = async () => {
            try {
-               const res = await supabaseClient.from('project_tasks').select('*').order('id', {ascending: false});
+               const res = await supabaseClient.from('project_db').select('*').order('id', {ascending: false});
                if(res.data) setProjects(res.data);
            } catch(e) {}
        };
        useEffect(() => { fetchProjects(); }, []);
 
-       const addProject = async () => {
-           const title = window.prompt("새로운 프로젝트 명을 입력하세요:");
-           if(title) {
-               const res = await supabaseClient.from('project_tasks').insert({title: title, status: 'To Do', manager: 'Jake'});
-               if(res.error) {
-                   alert("추가 실패: " + res.error.message + "\n\n(Tip: 테이블 이름이 'project_tasks'가 맞는지, 컬럼명이 title, status, manager가 맞는지 확인해주세요.)");
-               } else {
-                   logAction('프로젝트', '신규', title, 'To Do 에 추가됨');
-                   fetchProjects();
-               }
+       const saveProject = async (e) => {
+           e.preventDefault();
+           const payload = { title: e.target.p_title.value, personnel: e.target.p_manager.value, end_date: e.target.p_deadline.value, status: e.target.p_status.value };
+           let err;
+           if(modal.data?.id) {
+               const res = await supabaseClient.from('project_db').update(payload).eq('id', modal.data.id); err = res.error;
+           } else {
+               payload.id = 'proj-' + Date.now(); // text PK fallback
+               const res = await supabaseClient.from('project_db').insert(payload); err = res.error;
            }
+           if(err) { alert("추가 실패: " + err.message); return; }
+           setModal({isOpen:false, data:null});
+           fetchProjects();
        };
 
-       const moveProject = async (id, title, newStatus) => {
-           const res = await supabaseClient.from('project_tasks').update({status: newStatus}).eq('id', id);
-           if(res.error) {
-               alert("이동 실패: " + res.error.message);
-           } else {
-               logAction('프로젝트', '상태변경', title, newStatus);
-               fetchProjects();
-           }
+       const moveProject = async (id, newStatus) => {
+           await supabaseClient.from('project_db').update({status: newStatus}).eq('id', id);
+           fetchProjects();
        };
 
        return (
-          <div className="bg-white p-4 sm:p-8 rounded-2xl shadow border border-slate-200 min-h-[50vh] w-full mt-4">
+          <div className="bg-white p-4 sm:p-8 rounded-2xl shadow border border-slate-200 min-h-[50vh] w-full mb-10">
              <div className="flex justify-between items-center mb-6 border-b pb-4">
                 <h2 className="text-xl sm:text-2xl font-black text-slate-800">🚀 프로젝트 칸반 보드</h2>
-                <button onClick={addProject} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow text-sm transition">+ 태스크 추가</button>
+                <button onClick={() => setModal({isOpen:true, data:null})} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow text-sm transition">+ 태스크 추가</button>
              </div>
              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {['To Do', 'Doing', 'Done'].map(status => {
@@ -1143,12 +1128,12 @@
                            <div className="space-y-3">
                                {list.map(p => (
                                    <div key={p.id} className="bg-white p-3 rounded-lg shadow-sm border border-slate-100 hover:shadow-md transition">
-                                      <p className="font-bold text-sm text-slate-800 cursor-pointer hover:text-indigo-600">{p.title}</p>
+                                      <p onClick={()=>setModal({isOpen:true, data:p})} className="font-bold text-sm text-slate-800 cursor-pointer hover:text-indigo-600">{p.title}</p>
                                       <div className="text-[10px] text-slate-500 mt-2 flex justify-between items-center">
-                                          <span>담당: {p.manager}</span>
+                                          <span>마감: {p.end_date || '-'} | 담당: {p.personnel}</span>
                                           <div className="space-x-2">
-                                            {status === 'To Do' && <button onClick={()=>moveProject(p.id, p.title, 'Doing')} className="text-indigo-600 font-black hover:underline">시작 ▶</button>}
-                                            {status === 'Doing' && <button onClick={()=>moveProject(p.id, p.title, 'Done')} className="text-emerald-600 font-black hover:underline">완료 ✔️</button>}
+                                            {status === 'To Do' && <button onClick={()=>moveProject(p.id, 'Doing')} className="text-indigo-600 font-black hover:underline">시작 ▶</button>}
+                                            {status === 'Doing' && <button onClick={()=>moveProject(p.id, 'Done')} className="text-emerald-600 font-black hover:underline">완료 ✔️</button>}
                                           </div>
                                       </div>
                                    </div>
@@ -1158,41 +1143,226 @@
                     )
                 })}
              </div>
+
+             <Modal isOpen={modal.isOpen} onClose={()=>setModal({isOpen:false, data:null})} title={modal.data ? "태스크 수정" : "새 태스크 추가"} isNested={true}>
+                 <form onSubmit={saveProject} className="space-y-4">
+                     <div className="input-group"><label className="form-label">태스크 명</label><input name="p_title" type="text" className="form-input" defaultValue={modal.data?.title} required /></div>
+                     <div className="grid grid-cols-2 gap-3">
+                         <div className="input-group"><label className="form-label">담당자</label><input name="p_manager" type="text" className="form-input" defaultValue={modal.data?.personnel || 'Jake'} /></div>
+                         <div className="input-group"><label className="form-label">마감일</label><input name="p_deadline" type="date" className="form-input" defaultValue={modal.data?.end_date} /></div>
+                     </div>
+                     <div className="input-group">
+                         <label className="form-label">진행 상태</label>
+                         <select name="p_status" className="form-input" defaultValue={modal.data?.status || 'To Do'}>
+                             <option>To Do</option><option>Doing</option><option>Done</option>
+                         </select>
+                     </div>
+                     <div className="flex gap-2 pt-2">
+                         <button type="submit" className="w-full py-3 bg-indigo-600 text-white font-black rounded-xl text-sm hover:bg-indigo-700 shadow-lg">저장</button>
+                     </div>
+                 </form>
+             </Modal>
           </div>
        )
     }
 
     function MinutesWorkspace() {
+       const [minutes, setMinutes] = useState([]);
+       const [modal, setModal] = useState({ isOpen: false, data: null });
+
+       const fetchMinutes = async () => {
+           try {
+               const res = await supabaseClient.from('meeting_logs').select('*').order('meeting_date', {ascending: false});
+               if(res.data) setMinutes(res.data);
+           } catch(e) {}
+       };
+       useEffect(() => { fetchMinutes(); }, []);
+
+       const saveMinute = async (e) => {
+           e.preventDefault();
+           const payload = { meeting_date: e.target.m_date.value, topic: e.target.m_title.value, content: e.target.m_content.value };
+           let err;
+           if(modal.data?.id) {
+               const res = await supabaseClient.from('meeting_logs').update(payload).eq('id', modal.data.id); err = res.error;
+           } else {
+               const res = await supabaseClient.from('meeting_logs').insert(payload); err = res.error;
+           }
+           if(err) { alert("저장 실패: " + err.message); return; }
+           setModal({isOpen:false, data:null});
+           fetchMinutes();
+       };
+
        return (
-          <div className="bg-white p-8 rounded-2xl shadow border border-slate-200 text-center min-h-[50vh] flex flex-col justify-center items-center mt-4">
-             <div className="text-4xl mb-4">📝</div>
-             <h2 className="text-2xl font-black text-slate-800 mb-2">회의록 관리소</h2>
-             <p className="text-slate-500 font-bold">경영진 및 현장 회의 요약 기록. (퇴근 후 DB 연동 예정)</p>
+          <div className="bg-white p-4 sm:p-8 rounded-2xl shadow border border-slate-200 min-h-[50vh] w-full mt-4 mb-10">
+             <div className="flex justify-between items-center mb-6 border-b pb-4">
+                <h2 className="text-xl sm:text-2xl font-black text-slate-800">📝 회의록 관리소</h2>
+                <button onClick={() => setModal({isOpen:true, data:null})} className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg shadow text-sm hover:bg-indigo-700 transition">+ 새 회의록</button>
+             </div>
+             <div className="space-y-3">
+                 {minutes.length === 0 ? <p className="text-center text-slate-400 py-10 font-bold">등록된 회의록이 없습니다.</p> : minutes.map(m => (
+                     <div key={m.id} onClick={() => setModal({isOpen:true, data:m})} className="p-4 border border-slate-200 rounded-xl hover:bg-indigo-50 transition cursor-pointer">
+                         <div className="text-xs text-indigo-500 font-bold mb-1">{m.meeting_date}</div>
+                         <div className="font-black text-slate-800">{m.topic}</div>
+                     </div>
+                 ))}
+             </div>
+
+             <Modal isOpen={modal.isOpen} onClose={()=>setModal({isOpen:false, data:null})} title={modal.data ? "회의록 수정" : "새 회의록 작성"} isNested={true}>
+                 <form onSubmit={saveMinute} className="space-y-4">
+                     <div className="input-group"><label className="form-label">회의 일자</label><input name="m_date" type="date" className="form-input" defaultValue={modal.data?.meeting_date || getTodayStr()} required /></div>
+                     <div className="input-group"><label className="form-label">안건 / 제목</label><input name="m_title" type="text" className="form-input" defaultValue={modal.data?.topic} required /></div>
+                     <div className="input-group"><label className="form-label">회의 내용 (결정사항)</label><textarea name="m_content" className="form-input min-h-[150px]" defaultValue={modal.data?.content}></textarea></div>
+                     <div className="flex gap-2 pt-2">
+                         <button type="submit" className="w-full py-3 bg-indigo-600 text-white font-black rounded-xl text-sm hover:bg-indigo-700 shadow-lg">DB 저장</button>
+                     </div>
+                 </form>
+             </Modal>
           </div>
        )
     }
 
     function EngravingWorkspace() {
+       const [engravings, setEngravings] = useState([]);
+       const [modal, setModal] = useState({ isOpen: false, data: null });
+
+       const fetchEngravings = async () => {
+           try {
+               const res = await supabaseClient.from('engraving_mgmt').select('*').order('uid', {ascending: false});
+               if(res.data) setEngravings(res.data);
+           } catch(e) {}
+       };
+       useEffect(() => { fetchEngravings(); }, []);
+
+       const saveEngraving = async (e) => {
+           e.preventDefault();
+           const payload = { 제작일: e.target.e_date.value, 상세좌표: e.target.e_loc.value, 고인명: e.target.e_name.value, 규격: e.target.e_stone.value, 상태: e.target.e_status.value };
+           let err;
+           if(modal.data?.uid) {
+               const res = await supabaseClient.from('engraving_mgmt').update(payload).eq('uid', modal.data.uid); err = res.error;
+           } else {
+               payload.uid = 'eng-' + Date.now();
+               const res = await supabaseClient.from('engraving_mgmt').insert(payload); err = res.error;
+           }
+           if(err) { alert("저장 실패: " + err.message); return; }
+           setModal({isOpen:false, data:null});
+           fetchEngravings();
+       };
+
        return (
-          <div className="bg-white p-8 rounded-2xl shadow border border-slate-200 text-center min-h-[50vh] flex flex-col justify-center items-center mt-4">
-             <div className="text-4xl mb-4">⚰️</div>
-             <h2 className="text-2xl font-black text-slate-800 mb-2">비석 각인/발주 현황</h2>
-             <p className="text-slate-500 font-bold">포토샵 배치 스크립트와 연동될 발주 데이터 관제소. (퇴근 후 DB 연동 예정)</p>
+          <div className="bg-white p-4 sm:p-8 rounded-2xl shadow border border-slate-200 min-h-[50vh] w-full overflow-x-auto mt-4 mb-10">
+             <div className="flex justify-between items-center mb-6 border-b pb-4 min-w-[500px]">
+                <h2 className="text-xl sm:text-2xl font-black text-slate-800">⚰️ 비석 각인/발주 현황</h2>
+                <button onClick={() => setModal({isOpen:true, data:null})} className="px-4 py-2 bg-stone-800 text-white font-bold rounded-lg shadow text-sm hover:bg-stone-700 transition">+ 신규 발주</button>
+             </div>
+             <div className="min-w-[600px]">
+                <table className="w-full text-left border-collapse">
+                   <thead>
+                      <tr className="bg-slate-100 text-slate-600 text-xs font-black uppercase">
+                         <th className="p-3 border-b rounded-tl-lg">발주일자</th>
+                         <th className="p-3 border-b">안치위치</th>
+                         <th className="p-3 border-b">고인명</th>
+                         <th className="p-3 border-b">석재종류</th>
+                         <th className="p-3 border-b rounded-tr-lg">진행상태</th>
+                      </tr>
+                   </thead>
+                   <tbody>
+                      {engravings.length === 0 ? <tr><td colSpan="5" className="text-center py-10 text-slate-400 font-bold">진행 중인 발주 건이 없습니다.</td></tr> : engravings.map(e => (
+                          <tr key={e.uid} onClick={() => setModal({isOpen:true, data:e})} className="hover:bg-stone-50 transition cursor-pointer border-b border-slate-100">
+                             <td className="p-3 text-sm font-bold text-slate-700">{e.제작일}</td>
+                             <td className="p-3 text-sm font-bold text-blue-600">{e.상세좌표 || '-'}</td>
+                             <td className="p-3 text-sm font-black">{e.고인명}</td>
+                             <td className="p-3 text-xs text-slate-500">{e.규격 || '미정'}</td>
+                             <td className="p-3"><span className={`px-2 py-1 rounded text-[10px] font-black ${e.상태==='완료' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{e.상태}</span></td>
+                          </tr>
+                      ))}
+                   </tbody>
+                </table>
+             </div>
+
+             <Modal isOpen={modal.isOpen} onClose={()=>setModal({isOpen:false, data:null})} title={modal.data ? "발주 정보 수정" : "새 비석 발주"} isNested={true}>
+                 <form onSubmit={saveEngraving} className="space-y-4">
+                     <div className="grid grid-cols-2 gap-3">
+                         <div className="input-group"><label className="form-label">발주일자</label><input name="e_date" type="date" className="form-input" defaultValue={modal.data?.제작일 || getTodayStr()} required /></div>
+                         <div className="input-group"><label className="form-label">안치위치</label><input name="e_loc" type="text" className="form-input" defaultValue={modal.data?.상세좌표} placeholder="예: B6/가 4-9" /></div>
+                     </div>
+                     <div className="input-group"><label className="form-label">고인명</label><input name="e_name" type="text" className="form-input" defaultValue={modal.data?.고인명} required /></div>
+                     <div className="grid grid-cols-2 gap-3">
+                         <div className="input-group"><label className="form-label">석재종류</label><input name="e_stone" type="text" className="form-input" defaultValue={modal.data?.규격} placeholder="오석/자연석 등" /></div>
+                         <div className="input-group"><label className="form-label">진행상태</label>
+                             <select name="e_status" className="form-input" defaultValue={modal.data?.상태 || '시안 대기'}>
+                                 <option>시안 대기</option><option>발주 진행</option><option>완료</option>
+                             </select>
+                         </div>
+                     </div>
+                     <div className="flex gap-2 pt-2">
+                         <button type="submit" className="w-full py-3 bg-stone-800 text-white font-black rounded-xl text-sm hover:bg-stone-700 shadow-lg">DB 저장</button>
+                     </div>
+                 </form>
+             </Modal>
           </div>
        )
     }
 
     function ContactsWorkspace() {
+       const [contacts, setContacts] = useState([]);
+       const [modal, setModal] = useState({ isOpen: false, data: null });
+
+       const fetchContacts = async () => {
+           try {
+               const res = await supabaseClient.from('contacts').select('*').order('company_name', {ascending: true});
+               if(res.data) setContacts(res.data);
+           } catch(e) {}
+       };
+       useEffect(() => { fetchContacts(); }, []);
+
+       const saveContact = async (e) => {
+           e.preventDefault();
+           const payload = { company_name: e.target.c_comp.value, manager_name: e.target.c_name.value, phone1: e.target.c_phone.value, job_type: e.target.c_role.value };
+           let err;
+           if(modal.data?.id) {
+               const res = await supabaseClient.from('contacts').update(payload).eq('id', modal.data.id); err = res.error;
+           } else {
+               const res = await supabaseClient.from('contacts').insert(payload); err = res.error;
+           }
+           if(err) { alert("저장 실패: " + err.message); return; }
+           setModal({isOpen:false, data:null});
+           fetchContacts();
+       };
+
        return (
-          <div className="bg-white p-8 rounded-2xl shadow border border-slate-200 text-center min-h-[50vh] flex flex-col justify-center items-center mt-4">
-             <div className="text-4xl mb-4">📞</div>
-             <h2 className="text-2xl font-black text-slate-800 mb-2">통합 연락처 (주소록)</h2>
-             <p className="text-slate-500 font-bold">협력사 비상 연락망. (퇴근 후 DB 연동 예정)</p>
+          <div className="bg-white p-4 sm:p-8 rounded-2xl shadow border border-slate-200 min-h-[50vh] w-full mt-4 mb-10">
+             <div className="flex justify-between items-center mb-6 border-b pb-4">
+                <h2 className="text-xl sm:text-2xl font-black text-slate-800">📞 통합 주소록</h2>
+                <button onClick={() => setModal({isOpen:true, data:null})} className="px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg shadow text-sm hover:bg-emerald-700 transition">+ 연락처 추가</button>
+             </div>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 {contacts.length === 0 ? <p className="col-span-2 text-center text-slate-400 py-10 font-bold">등록된 연락처가 없습니다.</p> : contacts.map(c => (
+                     <div key={c.id} onClick={()=>setModal({isOpen:true, data:c})} className="p-4 border border-emerald-100 bg-emerald-50/30 rounded-xl flex justify-between items-center cursor-pointer hover:bg-emerald-50 transition shadow-sm">
+                         <div>
+                             <div className="text-[10px] font-black text-emerald-600">{c.job_type || '협력사'}</div>
+                             <div className="font-black text-slate-800 text-lg mt-0.5">{c.company_name} <span className="text-sm font-medium text-slate-500 ml-1">{c.manager_name}</span></div>
+                             <div className="text-xs font-bold text-slate-600 mt-1">{c.phone1}</div>
+                         </div>
+                         <a href={`tel:${c.phone1}`} onClick={(e)=>e.stopPropagation()} className="bg-white border border-emerald-200 text-emerald-600 p-3 rounded-full hover:bg-emerald-100 transition shadow-sm">📞</a>
+                     </div>
+                 ))}
+             </div>
+
+             <Modal isOpen={modal.isOpen} onClose={()=>setModal({isOpen:false, data:null})} title={modal.data ? "연락처 수정" : "새 연락처 추가"} isNested={true}>
+                 <form onSubmit={saveContact} className="space-y-4">
+                     <div className="input-group"><label className="form-label">업체명 (소속)</label><input name="c_comp" type="text" className="form-input" defaultValue={modal.data?.company_name} required /></div>
+                     <div className="input-group"><label className="form-label">담당자명</label><input name="c_name" type="text" className="form-input" defaultValue={modal.data?.manager_name} /></div>
+                     <div className="input-group"><label className="form-label">연락처</label><input name="c_phone" type="text" className="form-input" defaultValue={modal.data?.phone1} required /></div>
+                     <div className="input-group"><label className="form-label">역할/비고</label><input name="c_role" type="text" className="form-input" defaultValue={modal.data?.job_type} placeholder="조경업체, 장례지도사 등" /></div>
+                     <div className="flex gap-2 pt-2">
+                         <button type="submit" className="w-full py-3 bg-emerald-600 text-white font-black rounded-xl text-sm hover:bg-emerald-700 shadow-lg">DB 저장</button>
+                     </div>
+                 </form>
+             </Modal>
           </div>
        )
     }
 
-    // ⚙️ Main Application Controller
     function App() {
       const [activeTab, setActiveTab] = useState('dash');
       const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 1024);
@@ -1220,7 +1390,7 @@
           
           <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 border-r border-slate-800 text-slate-300 transform transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:hidden'} flex flex-col shadow-2xl lg:shadow-none`}>
             <div className="p-6 border-b border-slate-800 flex justify-between items-center shrink-0">
-              <h1 className="text-xl font-black text-white tracking-tighter">JAKE WorkOS <span className="text-[10px] bg-emerald-500 px-1.5 py-0.5 rounded ml-1 text-slate-900">V36</span></h1>
+              <h1 className="text-xl font-black text-white tracking-tighter">JAKE WorkOS <span className="text-[10px] bg-emerald-500 px-1.5 py-0.5 rounded ml-1 text-slate-900">V37</span></h1>
               <button className="lg:hidden text-slate-400 hover:text-white transition font-bold" onClick={() => setIsSidebarOpen(false)}>✕</button>
             </div>
             <nav className="p-4 space-y-8 overflow-y-auto flex-1 no-scrollbar">
@@ -1230,7 +1400,6 @@
                   <button onClick={() => {setActiveTab('dash'); if(window.innerWidth<1024)setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'dash' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'hover:bg-slate-800'}`}>📅 통합 일정 관리</button>
                   <button onClick={() => {setActiveTab('field'); if(window.innerWidth<1024)setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'field' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'hover:bg-slate-800'}`}>📍 현장 지도 (Map)</button>
                   <button onClick={() => {setActiveTab('hr'); if(window.innerWidth<1024)setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'hr' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'hover:bg-slate-800'}`}>🏖️ 근태 관리</button>
-                  {/* ✅ 통계 탭 신설 */}
                   <button onClick={() => {setActiveTab('stats'); if(window.innerWidth<1024)setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'stats' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'hover:bg-slate-800'}`}>📈 통계/분석</button>
                 </div>
               </div>
