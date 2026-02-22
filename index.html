@@ -1135,7 +1135,7 @@
        )
     }
 
-    // ✅ 각인 현황 (딥 서치 & 빈 날짜 에러 & 렌더링 Key 충돌 증발 완벽 방어)
+    // ✅ 각인 현황 (DB 1000줄 제한 돌파 및 풀스캔 엔진 탑재)
     function EngravingWorkspace() {
        const [engravings, setEngravings] = useState([]);
        const [modal, setModal] = useState({ isOpen: false, data: null });
@@ -1144,19 +1144,39 @@
        
        const [engSearch, setEngSearch] = useState('');
 
+       // ✅ [Fix] 1000줄 제한을 돌파하는 페이지네이션 풀스캔 엔진
        const fetchEngravings = async () => {
            try {
-               const res = await supabaseClient.from('engraving_mgmt').select('*').limit(10000);
-               if(res.data) {
-                   // ✅ [Fix] 고인명이 있는 데이터만 필터링하고, 렌더링 충돌 방지를 위해 프론트엔드 전용 절대 고유키(_renderKey)를 강제 부여
-                   const validData = res.data.filter(e => e.고인명 && String(e.고인명).trim() !== '').map((item, idx) => ({
+               let allData = [];
+               let step = 1000;
+               let hasMore = true;
+               let page = 0;
+               
+               // 1000개 단위로 DB의 끝(바닥)에 닿을 때까지 전부 긁어옵니다.
+               while(hasMore && page < 10) { 
+                   const res = await supabaseClient.from('engraving_mgmt')
+                                   .select('*')
+                                   .range(page * step, (page + 1) * step - 1);
+                   
+                   if(res.data && res.data.length > 0) {
+                       allData = [...allData, ...res.data];
+                       if(res.data.length < step) hasMore = false; // 1000개보다 적으면 끝에 도달한 것
+                   } else {
+                       hasMore = false;
+                   }
+                   page++;
+               }
+               
+               if(allData.length > 0) {
+                   const validData = allData.filter(e => e.고인명 && String(e.고인명).trim() !== '').map((item, idx) => ({
                        ...item,
                        _renderKey: item.uid ? `uid-${item.uid}-${idx}` : `nokey-${Date.now()}-${Math.random()}-${idx}`
                    }));
                    setEngravings(validData);
                }
-           } catch(e) {}
+           } catch(e) { console.error(e); }
        };
+       
        useEffect(() => { fetchEngravings(); }, []);
 
        // 검색 필터링 
@@ -1181,7 +1201,6 @@
            }, {});
            
            const result = Object.entries(grouped).map(([contract, items]) => {
-               // 띄어쓰기 무시 후 가중치 적용
                const highestUrgency = Math.min(...items.map(i => {
                    const cleanStatus = String(i.상태 || '').replace(/\s/g, '');
                    return statusWeight[cleanStatus] || 1; 
@@ -1310,7 +1329,7 @@
              
              {viewMode === 'folder' && (
                  <div className="space-y-3">
-                     {folderList.length === 0 && <div className="text-center p-10 text-slate-400 font-bold">검색 결과가 없습니다.</div>}
+                     {folderList.length === 0 && <div className="text-center p-10 text-slate-400 font-bold">데이터를 불러오는 중이거나 검색 결과가 없습니다.</div>}
                      {folderList.map(folder => {
                          const statusCols = { '접수':'bg-red-100 text-red-700', '디자인완료':'bg-amber-100 text-amber-700', '각인완료':'bg-blue-100 text-blue-700', '설치완료':'bg-slate-200 text-slate-500' };
                          const badgeCol = statusCols[folder.repStatus] || 'bg-slate-100';
@@ -1330,7 +1349,6 @@
                                  </div>
                              </div>
                              <div className={`p-4 bg-slate-50 border-t border-slate-200 space-y-2 ${expandedFolders[folder.contract] ? 'block' : 'hidden'}`}>
-                                     {/* ✅ [Fix] 117개의 null uid로 인한 렌더링 충돌 방지: 절대 고유키(_renderKey) 적용 */}
                                      {folder.items.map(item => (
                                          <div key={item._renderKey} onClick={()=>setModal({isOpen:true, data:item})} className="flex justify-between items-center p-3 bg-white border border-slate-200 rounded-xl hover:border-blue-400 hover:shadow-md cursor-pointer transition">
                                              <div>
