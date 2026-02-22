@@ -1135,7 +1135,7 @@
        )
     }
 
-    // ✅ 각인 현황 (DB 리미트 무제한 & 절대 고유키 적용)
+    // ✅ 각인 현황 (딥 서치 & 빈 날짜 에러 & 렌더링 Key 충돌 증발 완벽 방어)
     function EngravingWorkspace() {
        const [engravings, setEngravings] = useState([]);
        const [modal, setModal] = useState({ isOpen: false, data: null });
@@ -1146,13 +1146,20 @@
 
        const fetchEngravings = async () => {
            try {
-               // ✅ [Fix] 1000줄 제한 해제 (limit 10000 부여)
                const res = await supabaseClient.from('engraving_mgmt').select('*').limit(10000);
-               if(res.data) setEngravings(res.data.filter(e => e.고인명 && String(e.고인명).trim() !== ''));
+               if(res.data) {
+                   // ✅ [Fix] 고인명이 있는 데이터만 필터링하고, 렌더링 충돌 방지를 위해 프론트엔드 전용 절대 고유키(_renderKey)를 강제 부여
+                   const validData = res.data.filter(e => e.고인명 && String(e.고인명).trim() !== '').map((item, idx) => ({
+                       ...item,
+                       _renderKey: item.uid ? `uid-${item.uid}-${idx}` : `nokey-${Date.now()}-${Math.random()}-${idx}`
+                   }));
+                   setEngravings(validData);
+               }
            } catch(e) {}
        };
        useEffect(() => { fetchEngravings(); }, []);
 
+       // 검색 필터링 
        const filteredEngravings = useMemo(() => {
            if(!engSearch.trim()) return engravings;
            const q = engSearch.toLowerCase();
@@ -1243,7 +1250,6 @@
 
        const saveEngraving = async (e) => {
            e.preventDefault();
-           // ✅ [에러 픽스] 문자열 "null" 방어. cleanDbString 함수 사용
            const payload = { 
                안치_예정_일: cleanDbString(e.target.e_an_date.value), 상세좌표: cleanDbString(e.target.e_loc.value), 고인명: cleanDbString(e.target.e_name.value), 
                생년월일: cleanDbString(e.target.e_birth.value), 생_음양: cleanDbString(e.target.e_birth_type.value),
@@ -1304,7 +1310,7 @@
              
              {viewMode === 'folder' && (
                  <div className="space-y-3">
-                     {folderList.length === 0 && <div className="text-center p-10 text-slate-400 font-bold">데이터가 없습니다.</div>}
+                     {folderList.length === 0 && <div className="text-center p-10 text-slate-400 font-bold">검색 결과가 없습니다.</div>}
                      {folderList.map(folder => {
                          const statusCols = { '접수':'bg-red-100 text-red-700', '디자인완료':'bg-amber-100 text-amber-700', '각인완료':'bg-blue-100 text-blue-700', '설치완료':'bg-slate-200 text-slate-500' };
                          const badgeCol = statusCols[folder.repStatus] || 'bg-slate-100';
@@ -1324,9 +1330,9 @@
                                  </div>
                              </div>
                              <div className={`p-4 bg-slate-50 border-t border-slate-200 space-y-2 ${expandedFolders[folder.contract] ? 'block' : 'hidden'}`}>
-                                     {/* ✅ [Fix] 고유키 부여로 증발 완전 방지 */}
-                                     {folder.items.map((item, idx) => (
-                                         <div key={`${folder.contract}-${item.고인명}-${idx}`} onClick={()=>setModal({isOpen:true, data:item})} className="flex justify-between items-center p-3 bg-white border border-slate-200 rounded-xl hover:border-blue-400 hover:shadow-md cursor-pointer transition">
+                                     {/* ✅ [Fix] 117개의 null uid로 인한 렌더링 충돌 방지: 절대 고유키(_renderKey) 적용 */}
+                                     {folder.items.map(item => (
+                                         <div key={item._renderKey} onClick={()=>setModal({isOpen:true, data:item})} className="flex justify-between items-center p-3 bg-white border border-slate-200 rounded-xl hover:border-blue-400 hover:shadow-md cursor-pointer transition">
                                              <div>
                                                 <span className="font-black text-slate-800 text-[15px]">{item.고인명}</span> 
                                                 <span className="text-xs text-blue-600 font-bold ml-2 bg-blue-50 px-2 py-0.5 rounded">{item.상세좌표}</span>
@@ -1363,7 +1369,7 @@
                               {d.dayEvents.map((ev,idx)=>{
                                 const statusCols = { '접수':'bg-red-100 text-red-700', '디자인완료':'bg-amber-100 text-amber-700', '각인완료':'bg-blue-100 text-blue-700', '설치완료':'bg-slate-200 text-slate-500' };
                                 const st = statusCols[String(ev.상태).replace(/\s/g,'')] || 'bg-slate-100';
-                                return <div key={idx} onClick={()=>setModal({isOpen:true, data:ev})} className={`px-1.5 py-0.5 rounded text-[10px] font-bold truncate shadow-sm cursor-pointer ${st}`}>{ev.고인명} ({ev.상태})</div>
+                                return <div key={ev._renderKey} onClick={()=>setModal({isOpen:true, data:ev})} className={`px-1.5 py-0.5 rounded text-[10px] font-bold truncate shadow-sm cursor-pointer ${st}`}>{ev.고인명} ({ev.상태})</div>
                               })}
                             </div>
                           </>
