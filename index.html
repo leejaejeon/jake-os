@@ -1162,7 +1162,7 @@
        )
     }
 
-    // ✅ 각인 현황 (딥 서치 & 빈 날짜 에러 완벽 픽스)
+    // ✅ 각인 현황 (딥 서치 & 빈 날짜 에러 & 폴더 깨짐 완벽 픽스)
     function EngravingWorkspace() {
        const [engravings, setEngravings] = useState([]);
        const [modal, setModal] = useState({ isOpen: false, data: null });
@@ -1206,10 +1206,12 @@
                const repStatus = Object.keys(statusWeight).find(k => statusWeight[k] === highestUrgency) || '접수';
                const isDone = highestUrgency === 4;
                const earliestDate = items.reduce((min, i) => (!min || (i.안치_예정_일 && i.안치_예정_일 < min)) ? i.안치_예정_일 : min, null);
+               // 폴더 내 고인 정렬 (안치일 기준)
                items.sort((a,b) => new Date(b.안치_예정_일||0) - new Date(a.안치_예정_일||0));
                return { contract, items, isDone, repStatus, highestUrgency, earliestDate };
            });
            
+           // 전체 폴더 정렬 (우선순위 -> 안치일 기준)
            result.sort((a,b) => {
                if(a.highestUrgency !== b.highestUrgency) return a.highestUrgency - b.highestUrgency;
                return new Date(b.earliestDate||0) - new Date(a.earliestDate||0);
@@ -1246,8 +1248,8 @@
            if(parsed.gwang) document.getElementsByName('e_gwang')[0].value = parsed.gwang;
            
            if(parsed.stone) {
-              const st = parsed.stone.replace(/\s/g,''); let mapped = "100*70";
-              if(st.includes("160")) mapped = "160*100"; else if(st.includes("130")) mapped = "130*80"; else if(st.includes("62")) mapped = "100*62";
+              const st = parsed.stone.replace(/\s/g,''); let mapped = "100*70 (오석)";
+              if(st.includes("160")) mapped = "160*100 (표찰)"; else if(st.includes("130")) mapped = "130*80 (표찰)"; else if(st.includes("62")) mapped = "100*62 (표찰)";
               document.getElementsByName('e_stone')[0].value = mapped;
            }
            if(parsed.rel) {
@@ -1266,15 +1268,25 @@
 
        const saveEngraving = async (e) => {
            e.preventDefault();
-           // ✅ [에러 픽스] 날짜에 빈칸("")이 들어갈 경우 Postgres DB 에러를 막기 위해 nullIfEmpty 함수 적용
+           // ✅ [에러 픽스] 날짜에 빈칸("")이 들어갈 경우 Postgres DB 에러를 막기 위해 철저한 null 처리
            const payload = { 
-               안치_예정_일: nullIfEmpty(e.target.e_an_date.value), 상세좌표: nullIfEmpty(e.target.e_loc.value), 고인명: nullIfEmpty(e.target.e_name.value), 
-               생년월일: nullIfEmpty(e.target.e_birth.value), 생_음양: nullIfEmpty(e.target.e_birth_type.value),
-               졸년월일: nullIfEmpty(e.target.e_death.value), 졸_음양: nullIfEmpty(e.target.e_death_type.value),
-               계약자: nullIfEmpty(e.target.e_contractor.value), 규격: nullIfEmpty(e.target.e_stone.value), 상태: nullIfEmpty(e.target.e_status.value),
-               광중위치: nullIfEmpty(e.target.e_gwang.value), 종교: nullIfEmpty(e.target.e_rel.value), 표기: nullIfEmpty(e.target.e_mark.value), 
-               비고: nullIfEmpty(e.target.e_memo.value), 계약번호: nullIfEmpty(e.target.e_contractNo.value),
-               신청서: nullIfEmpty(e.target.e_form.value), 각인: nullIfEmpty(e.target.e_print.value)
+               안치_예정_일: e.target.e_an_date.value ? e.target.e_an_date.value : null, 
+               상세좌표: e.target.e_loc.value || null, 
+               고인명: e.target.e_name.value || null, 
+               생년월일: e.target.e_birth.value ? e.target.e_birth.value : null, 
+               생_음양: e.target.e_birth_type.value || null,
+               졸년월일: e.target.e_death.value ? e.target.e_death.value : null, 
+               졸_음양: e.target.e_death_type.value || null,
+               계약자: e.target.e_contractor.value || null, 
+               규격: e.target.e_stone.value || null, 
+               상태: e.target.e_status.value || null,
+               광중위치: e.target.e_gwang.value || null, 
+               종교: e.target.e_rel.value || null, 
+               표기: e.target.e_mark.value || null, 
+               비고: e.target.e_memo.value || null, 
+               계약번호: e.target.e_contractNo.value || null,
+               신청서: e.target.e_form.value || null, 
+               각인: e.target.e_print.value || null
            };
            let err;
            
@@ -1282,7 +1294,8 @@
            if(modal.data?.uid) { 
                const res = await supabaseClient.from('engraving_mgmt').update(payload).eq('uid', modal.data.uid); err = res.error; 
            } else { 
-               payload.uid = 'eng-' + Date.now(); const res = await supabaseClient.from('engraving_mgmt').insert(payload); err = res.error; 
+               payload.uid = 'eng-' + Date.now(); // 새 고유 ID 부여
+               const res = await supabaseClient.from('engraving_mgmt').insert(payload); err = res.error; 
            }
            
            if(err) { alert("저장 실패: " + err.message); return; }
@@ -1327,7 +1340,7 @@
              
              {viewMode === 'folder' && (
                  <div className="space-y-3">
-                     {folderList.length === 0 && <div className="text-center p-10 text-slate-400 font-bold">검색 결과가 없습니다.</div>}
+                     {folderList.length === 0 && <div className="text-center p-10 text-slate-400 font-bold">데이터가 없습니다.</div>}
                      {folderList.map(folder => {
                          const statusCols = { '접수':'bg-red-100 text-red-700', '디자인완료':'bg-amber-100 text-amber-700', '각인완료':'bg-blue-100 text-blue-700', '설치완료':'bg-slate-200 text-slate-500' };
                          const badgeCol = statusCols[folder.repStatus] || 'bg-slate-100';
@@ -1372,7 +1385,9 @@
                         <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth()+1, 1))} className="px-3 py-1 bg-white border border-slate-200 rounded-lg font-bold">▶</button>
                       </div>
                   </div>
-                  <div className="grid grid-cols-7 gap-px">{['월','화','수','목','금','토','일'].map((d,i)=>(<div key={d} className={`py-2 text-center text-sm font-black bg-white ${i===6?'text-red-500':i===5?'text-blue-500':'text-slate-700'}`}>{d}</div>))}</div>
+                  <div className="grid grid-cols-7 gap-px">
+                    {['월','화','수','목','금','토','일'].map((d,i)=>(<div key={d} className={`py-2 text-center text-sm font-black bg-white ${i===6?'text-red-500':i===5?'text-blue-500':'text-slate-700'}`}>{d}</div>))}
+                  </div>
                   <div className="grid grid-cols-7 gap-px">
                     {calendarDays.map((d,i)=>(
                       <div key={i} className={`calendar-cell flex flex-col ${!d?'bg-slate-50 cursor-default':''}`}>
@@ -1426,8 +1441,18 @@
                          <div className="input-group"><label className="form-label">광중위치</label><input name="e_gwang" type="text" className="form-input" defaultValue={modal.data?.광중위치} placeholder="좌/우/합장" /></div>
                      </div>
                      <div className="grid grid-cols-3 gap-3">
-                         <div className="input-group"><label className="form-label">규격(석재)</label><select name="e_stone" className="form-input" defaultValue={modal.data?.규격||'100*70'}><option value="100*70">100*70 (오석)</option><option value="160*100">160*100 (표찰)</option><option value="130*80">130*80 (표찰)</option><option value="100*62">100*62 (표찰)</option></select></div>
-                         <div className="input-group"><label className="form-label">종교</label><select name="e_rel" className="form-input" defaultValue={modal.data?.종교||'기독교'}><option>기독교</option><option>천주교</option><option>불교</option><option>무교/기타</option></select></div>
+                         <div className="input-group">
+                             <label className="form-label">규격(석재)</label>
+                             <select name="e_stone" className="form-input" defaultValue={modal.data?.규격||'100*70 (오석)'}>
+                                 <option value="100*70 (오석)">100*70 (오석)</option><option value="160*100 (표찰)">160*100 (표찰)</option><option value="130*80 (표찰)">130*80 (표찰)</option><option value="100*62 (표찰)">100*62 (표찰)</option>
+                             </select>
+                         </div>
+                         <div className="input-group">
+                             <label className="form-label">종교</label>
+                             <select name="e_rel" className="form-input" defaultValue={modal.data?.종교||'기독교'}>
+                                 <option>기독교</option><option>천주교</option><option>불교</option><option>무교/기타</option>
+                             </select>
+                         </div>
                          <div className="input-group"><label className="form-label">표기(한자등)</label><input name="e_mark" type="text" className="form-input" defaultValue={modal.data?.표기} /></div>
                      </div>
                      <div className="grid grid-cols-2 gap-3">
