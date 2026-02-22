@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Jake WorkOS V42 - Analytical Workspace</title>
+  <title>Jake WorkOS V43 - Intelligent Dashboard</title>
   
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -70,6 +70,17 @@
     const getTodayStr = () => new Date().toISOString().split('T')[0];
     const formatMoney = (val) => { try { const num = parseInt(String(val).replace(/[^0-9]/g, '')); return isNaN(num) ? '0원' : num.toLocaleString() + '원'; } catch(e) { return '0원'; } };
 
+    // URL 자동 링크 변환 렌더러
+    const renderWithLinks = (text) => {
+        if(!text) return null;
+        const urlRegex = /(https?:\/\/[^\s]+)/g;
+        const parts = String(text).split(urlRegex);
+        return parts.map((part, i) => {
+            if(part.match(urlRegex)) return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all" onClick={e=>e.stopPropagation()}>{part}</a>;
+            return part;
+        });
+    };
+
     const SECTION_LIST = ['A2/가','A3/가','A4/가','A4/나','A4/다','A5/가','A5/나','A6/가','A6/나','B1/가','B2/가','B3/가','B4/가','B5/가','B6/가/1-12','B6/가/13-14','C1/가'];
     const ROW_CONFIG = { 'A2/가':[12], 'A3/가':[8,8], 'A4/가':[12,12,12,12,18,18,28,12], 'A4/나':[9,11,7,8,8], 'A4/다':[6,6], 'A5/가':[13,14,14,13,13,15,11], 'A5/나':[23,22,26,25,30,47,47,30,39], 'A6/가':[27,27,22,18,19,15,13], 'A6/나':[25,26,26,26,26,26], 'C1/가':[13,17,21,25], 'B1/가':[20,23], 'B2/가':[34,34,35,34,34], 'B3/가':[48,46,45,41], 'B4/가':[37,38,41,41,34], 'B5/가':[47,47,49,48,40,32], 'B6/가/1-12':[47,52,53,52,53,53,54,54,54,53,55,54,50], 'B6/가/13-14':[75,75,75,75,75,75,75,75,75] };
 
@@ -83,21 +94,26 @@
       constructor(props) { super(props); this.state = { hasError: false, error: null }; }
       static getDerivedStateFromError(error) { return { hasError: true, error }; }
       render() {
-        if (this.state.hasError) return ( <div className="p-8 m-4 bg-rose-50 border-2 border-rose-500 rounded-xl shadow-lg"><h1 className="text-xl font-black text-rose-700 mb-2">🚨 V42 렌더링 에러</h1><pre className="text-xs bg-white p-4 rounded border border-rose-200 overflow-auto">{this.state.error?.toString()}</pre></div> );
+        if (this.state.hasError) return ( <div className="p-8 m-4 bg-rose-50 border-2 border-rose-500 rounded-xl shadow-lg"><h1 className="text-xl font-black text-rose-700 mb-2">🚨 V43 렌더링 에러</h1><pre className="text-xs bg-white p-4 rounded border border-rose-200 overflow-auto">{this.state.error?.toString()}</pre></div> );
         return this.props.children; 
       }
     }
 
-    function Modal({ isOpen, onClose, title, children, isNested = false }) {
+    function Modal({ isOpen, onClose, title, children, isNested = false, fullScreen = false }) {
       if (!isOpen) return null;
       const zIndex = isNested ? "z-[110]" : "z-[100]"; 
-      const bgOpacity = isNested ? "bg-slate-900/50" : "bg-slate-900/70";
+      // ✅ 풀스크린 속성 적용
+      const screenStyle = fullScreen ? "w-full h-full rounded-none" : "w-full max-w-md max-h-[85vh] rounded-2xl shadow-2xl";
+      const bgOpacity = fullScreen ? "bg-slate-900" : (isNested ? "bg-slate-900/50" : "bg-slate-900/70");
+
       return (
-        <div className={`fixed inset-0 flex items-center justify-center p-4 ${bgOpacity} ${zIndex}`} onClick={onClose}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col modal-enter" onClick={e => e.stopPropagation()}>
+        <div className={`fixed inset-0 flex items-center justify-center ${fullScreen ? 'p-0' : 'p-4'} ${bgOpacity} ${zIndex}`} onClick={fullScreen ? undefined : onClose}>
+          <div className={`bg-white overflow-hidden flex flex-col modal-enter ${screenStyle}`} onClick={e => e.stopPropagation()}>
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
               <h3 className="text-lg font-black text-slate-800 tracking-tight">{title}</h3>
-              <button onClick={onClose} className="p-1 hover:bg-slate-200 rounded-lg text-slate-500 font-bold transition">✕</button>
+              <button onClick={onClose} className="p-1 hover:bg-slate-200 rounded-lg text-slate-500 font-bold transition flex items-center gap-1">
+                  {fullScreen ? <><span className="text-xl">←</span> 닫기</> : '✕'}
+              </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 bg-slate-50/50 relative">{children}</div>
           </div>
@@ -182,6 +198,7 @@
       );
     }
 
+    // 📊 Dashboard View
     function DashboardView({ layoutData }) {
       const [loading, setLoading] = useState(true);
       const [events, setEvents] = useState([]);
@@ -224,6 +241,7 @@
              return { ...r, work_date: d, worker_name: n };
           });
           setHrData(cleanHr);
+
         } catch (e) {} finally { setLoading(false); }
       };
 
@@ -381,7 +399,8 @@
                           <div className={`pointer-events-none text-right text-xs font-bold p-1 ${getTodayStr() === d.dateStr ? 'text-white bg-blue-600 inline-block self-end rounded-md px-2' : 'text-slate-500'}`}>{d.day}</div>
                           <div className="pointer-events-none space-y-1 pb-1">
                             {d.dayEvents.map((ev,idx)=>{
-                              const isCancel = ev.status === '취소'; const isDone = ev.status === '답사완료' || ev.status === '안치확정';
+                              const isCancel = ev.status === '취소';
+                              const isDone = ev.status === '답사완료' || ev.status === '안치확정';
                               let st = ev.type === 'burial' ? 'bg-emerald-600 text-white' : (isCancel ? 'bg-slate-200 text-slate-500 line-through' : isDone ? 'bg-blue-100 text-blue-800' : 'bg-amber-300 text-amber-900');
                               return <div key={idx} className={`px-1.5 py-0.5 rounded text-[10px] font-bold truncate shadow-sm ${st}`}>{ev.title}</div>
                             })}
@@ -394,7 +413,7 @@
               </div>
             </div>
           </div>
-
+          
           <Modal isOpen={dailyModal.isOpen} onClose={()=>setDailyModal({...dailyModal, isOpen:false})} title={`📅 ${dailyModal.dateStr} 일정`}>
             {dailyModal.events.length === 0 ? <div className="text-center p-8 text-slate-400 font-bold">등록된 일정이 없습니다.</div> : (
               <div className="space-y-2">
@@ -531,14 +550,12 @@
       );
     }
 
-    // 📈 MODULE 4: Stats View (추세선 선형회귀 알고리즘 탑재)
+    // 📈 MODULE 4: Stats View (듀얼 선형 회귀)
     function StatsView() {
       const [events, setEvents] = useState([]);
       const [currentDate, setCurrentDate] = useState(new Date());
       const chartRef = useRef(null);
-      const trendRef = useRef(null);
       const chartInstance = useRef(null);
-      const trendInstance = useRef(null);
       const [detailModal, setDetailModal] = useState({ isOpen: false, month: '', items: [] });
 
       useEffect(() => {
@@ -552,7 +569,7 @@
         fetchEvents();
       }, []);
 
-      // 선형 회귀 계산 (y = mx + b)
+      // 최소자승법 (Linear Regression) 알고리즘
       const calculateTrendLine = (dataPoints) => {
           let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
           const n = dataPoints.length;
@@ -569,18 +586,17 @@
             let d = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
             let y = d.getFullYear(); let m = String(d.getMonth() + 1).padStart(2, '0'); 
             let key = `${y}-${m}`;
-            
             let uniqueBurials = new Set();
-            events.forEach((ev, idx) => { 
-                if (ev.type === 'burial' && ev.date && ev.date.startsWith(key)) {
-                    const contractNo = clean(ev.raw.계약번호); uniqueBurials.add(contractNo ? contractNo : `indiv_${idx}`); 
-                } 
-            });
-            labels.push(`${String(y).substring(2)}-${m}`); 
-            dataCounts.push(uniqueBurials.size);
+            events.forEach((ev, idx) => { if (ev.type === 'burial' && ev.date && ev.date.startsWith(key)) { uniqueBurials.add(clean(ev.raw.계약번호) ? clean(ev.raw.계약번호) : `indiv_${idx}`); } });
+            labels.push(`${String(y).substring(2)}-${m}`); dataCounts.push(uniqueBurials.size);
         }
         
-        const trendData = calculateTrendLine(dataCounts);
+        // 장기(16개월) 및 단기(최근 6개월) 추세선 데이터 생성
+        const longTrend = calculateTrendLine(dataCounts);
+        const shortData = dataCounts.slice(-6);
+        const shortTrendRaw = calculateTrendLine(shortData);
+        const shortTrend = new Array(16).fill(null);
+        shortTrend.splice(10, 6, ...shortTrendRaw);
 
         if (chartInstance.current) chartInstance.current.destroy();
         const ctx = chartRef.current.getContext('2d');
@@ -589,14 +605,15 @@
             data: { 
                 labels: labels, 
                 datasets: [
-                    { type: 'line', label: '선형 추세선', data: trendData, borderColor: '#ef4444', borderWidth: 2, borderDash: [5, 5], fill: false, pointRadius: 0, datalabels: { display: false } },
+                    { type: 'line', label: '단기 추세선 (6M)', data: shortTrend, borderColor: '#ef4444', borderWidth: 3, borderDash: [3, 3], fill: false, pointRadius: 0, datalabels: { display: false } },
+                    { type: 'line', label: '장기 추세선 (16M)', data: longTrend, borderColor: '#3b82f6', borderWidth: 2, borderDash: [5, 5], fill: false, pointRadius: 0, datalabels: { display: false } },
                     { type: 'bar', label: '안치건수', data: dataCounts, backgroundColor: '#2E7D32', borderRadius: 4 }
                 ] 
             },
             options: {
                 responsive: true, maintainAspectRatio: false,
                 layout: { padding: { top: 20 } },
-                plugins: { legend: { display: false }, datalabels: { anchor: 'end', align: 'end', color: '#333', font: { weight: 'bold', size: 10 }, formatter: (v, ctx) => ctx.datasetIndex === 1 && v > 0 ? v : "" } },
+                plugins: { legend: { display: true, position: 'bottom' }, datalabels: { anchor: 'end', align: 'end', color: '#333', font: { weight: 'bold', size: 10 }, formatter: (v, ctx) => ctx.datasetIndex === 2 && v > 0 ? v : "" } },
                 scales: { y: { beginAtZero: true, grace: '10%', ticks: { stepSize: 1 } }, x: { ticks: { font: { size: 9 } } } },
                 onClick: (e, activeElements) => {
                     if (activeElements.length > 0) {
@@ -614,8 +631,10 @@
       return (
         <div className="space-y-4 max-w-7xl mx-auto flex flex-col w-full relative mb-10">
           <div className="bg-white rounded-2xl shadow border border-slate-200 p-6">
-              <h3 className="text-left font-black text-slate-800 text-lg mb-2">📈 월별 안치 현황 및 추세 분석</h3>
-              <p className="text-xs text-slate-500 font-bold mb-4">붉은 점선(선형 회귀선)을 기준으로 최근 성장/둔화 추세를 파악할 수 있습니다.</p>
+              <h3 className="text-left font-black text-slate-800 text-xl mb-1">📊 선형 회귀(Linear Regression) 기반 안치 모멘텀 분석</h3>
+              <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg mb-4 text-xs font-bold text-slate-600 leading-relaxed">
+                  💡 <span className="text-blue-600">장기 추세선(파란색)</span>이 꾸준히 우상향하더라도, <span className="text-red-500">단기 6개월 추세선(빨간색)</span>이 그 아래로 꺾여 있다면 최근 반년 동안의 성장 모멘텀이 둔화되고 있다는 즉각적인 경고(Warning) 신호입니다.
+              </div>
               <div className="w-full h-[400px] relative cursor-pointer">
                   <canvas ref={chartRef}></canvas>
               </div>
@@ -722,10 +741,8 @@
              let multiplier = 1;
              if (['반차','오전반차', '오후반차', '조퇴'].includes(st)) multiplier = 0.5;
              else if (['휴무', '연차', '병가'].includes(st)) multiplier = 0;
-             if (EMP_WEIGHTS[emp]) {
-                 cap.contract += (EMP_WEIGHTS[emp].contract * multiplier); cap.guide += (EMP_WEIGHTS[emp].guide * multiplier);
-                 cap.burial += (EMP_WEIGHTS[emp].burial * multiplier); cap.landscaping += (EMP_WEIGHTS[emp].landscaping * multiplier);
-             }
+             
+             if (EMP_WEIGHTS[emp]) { cap.contract += (EMP_WEIGHTS[emp].contract * multiplier); cap.guide += (EMP_WEIGHTS[emp].guide * multiplier); cap.burial += (EMP_WEIGHTS[emp].burial * multiplier); cap.landscaping += (EMP_WEIGHTS[emp].landscaping * multiplier); }
           });
 
           const dayEvents = events.filter(e => e.date === ds);
@@ -752,7 +769,6 @@
           e.preventDefault();
           const dateStr = dayModal.dateStr;
           await supabaseClient.from('hr_management').delete().eq('work_date', dateStr);
-          
           const insertData = EMPLOYEES.map((emp, i) => ({ work_date: dateStr, worker_name: emp, status: e.target[`hr_st_${i}`].value, memo: e.target.hr_note.value }));
           await supabaseClient.from('hr_management').insert(insertData);
           logAction('근태관리', '수정', dateStr, '일괄 저장');
@@ -791,9 +807,7 @@
                                return null;
                             })}
                           </div>
-                          {d.warnings.length > 0 && (
-                            <div className="pointer-events-none mt-auto bg-red-100 border border-red-300 text-red-700 text-[10px] font-black rounded p-1 leading-tight tracking-tighter text-center">🚨 {d.warnings.join(', ')} 부족</div>
-                          )}
+                          {d.warnings.length > 0 && <div className="pointer-events-none mt-auto bg-red-100 border border-red-300 text-red-700 text-[10px] font-black rounded p-1 leading-tight tracking-tighter text-center">🚨 {d.warnings.join(', ')} 부족</div>}
                         </>
                       )}
                     </div>
@@ -805,7 +819,9 @@
 
           <div className="bg-white rounded-2xl shadow border border-slate-200 p-4 mb-10">
               <h3 className="text-center font-black text-slate-800 text-sm mb-2">📊 이번 달 개인별 휴무 합계</h3>
-              <div className="w-full h-[200px] relative"><canvas ref={chartRef}></canvas></div>
+              <div className="w-full h-[200px] relative">
+                  <canvas ref={chartRef}></canvas>
+              </div>
           </div>
 
           <Modal isOpen={dayModal.isOpen} onClose={()=>setDayModal({isOpen:false, dateStr:'', data:{}})} title={`📝 ${dayModal.dateStr} 근무 수정`}>
@@ -817,8 +833,7 @@
                           <div key={emp} className="flex justify-between items-center p-3 border-b border-dashed border-slate-200">
                               <span className="font-bold text-sm" style={{color: EMP_COLORS[i]}}>{emp}</span>
                               <select name={`hr_st_${i}`} className={`p-2 rounded-lg font-bold text-sm outline-none border ${bg}`} defaultValue={st}>
-                                  <option value="출근">🟢 출근</option><option value="반차">🌗 반차 (0.5)</option><option value="오전반차">🌗 오전 반차 (0.5)</option>
-                                  <option value="오후반차">🌓 오후 반차 (0.5)</option><option value="조퇴">📉 조퇴 (0.5)</option><option value="휴무">🔴 휴무 (1)</option><option value="연차">🔴 연차 (1)</option>
+                                  <option value="출근">🟢 출근</option><option value="반차">🌗 반차 (0.5)</option><option value="오전반차">🌗 오전 반차 (0.5)</option><option value="오후반차">🌓 오후 반차 (0.5)</option><option value="조퇴">📉 조퇴 (0.5)</option><option value="휴무">🔴 휴무 (1)</option><option value="연차">🔴 연차 (1)</option>
                               </select>
                           </div>
                       );
@@ -882,6 +897,7 @@
           if(slotModal.data?.id) { const res = await supabaseClient.from('field_data').update(payload).eq('id', slotModal.data.id); err = res.error; } 
           else { const res = await supabaseClient.from('field_data').insert(payload); err = res.error; }
           if(err) { alert(`저장 실패: ${err.message}`); return; }
+          logAction('현장관리', '수정', `${area} ${slotModal.data.위치_번호}`, `상태: ${payload.계약_상태}`);
           setSlotModal({isOpen:false, data:null}); setLoading(true);
           const [areaRes, allRes] = await Promise.all([ supabaseClient.from('field_data').select('*').eq('구역', area), supabaseClient.from('field_data').select('*') ]);
           setData(areaRes.data || []); setAllFieldData(allRes.data || []); setLoading(false);
@@ -903,19 +919,13 @@
                  </div>
              )}
           </div>
-
           <div className="w-full bg-[#F8FAFC] sticky top-14 z-[80] pt-1 pb-2 border-b border-slate-200">
              <div className="flex gap-2 overflow-x-auto px-2 custom-scrollbar pb-1" style={{ WebkitOverflowScrolling: 'touch' }}>
-               {SECTION_LIST.map(s => (
-                 <button key={s} onClick={() => setArea(s)} className={`flex-none px-4 py-2.5 rounded-t-xl font-bold text-[13px] whitespace-nowrap transition-all border-t border-l border-r ${area === s ? 'bg-white text-blue-600 border-slate-200 translate-y-[1px] shadow-[0_-2px_4px_rgba(0,0,0,0.02)]' : 'bg-slate-100 text-slate-500 border-transparent hover:bg-slate-200'}`}>{s}</button>
-               ))}
+               {SECTION_LIST.map(s => ( <button key={s} onClick={() => setArea(s)} className={`flex-none px-4 py-2.5 rounded-t-xl font-bold text-[13px] whitespace-nowrap transition-all border-t border-l border-r ${area === s ? 'bg-white text-blue-600 border-slate-200 translate-y-[1px] shadow-[0_-2px_4px_rgba(0,0,0,0.02)]' : 'bg-slate-100 text-slate-500 border-transparent hover:bg-slate-200'}`}>{s}</button> ))}
              </div>
           </div>
-
           <div className="bg-white p-4 md:p-8 rounded-b-2xl rounded-tr-2xl shadow-xl border border-slate-200 overflow-auto w-full">
-            {loading || Object.keys(layoutData).length === 0 ? (
-              <div className="flex h-64 items-center justify-center font-black text-slate-300 animate-pulse tracking-widest text-lg">MAP SYNCING...</div>
-            ) : (
+            {loading || Object.keys(layoutData).length === 0 ? ( <div className="flex h-64 items-center justify-center font-black text-slate-300 animate-pulse tracking-widest text-lg">MAP SYNCING...</div> ) : (
               <div className="min-w-max pb-20 pr-20">
                 {renderedGrid.map((row, rIdx) => (
                   <div key={rIdx} className="map-row">
@@ -941,12 +951,7 @@
               <form onSubmit={saveField} className="space-y-4">
                 <div className="flex justify-between items-center bg-slate-100 p-4 rounded-xl border border-slate-200 shadow-inner">
                   <div className="flex-1 pr-4 border-r border-slate-300"><label className="form-label">안치자 (성함)</label><input name="f_name" type="text" className="form-input bg-white text-lg font-black" defaultValue={clean(slotModal.data.성함)} /></div>
-                  <div className="pl-4 w-32">
-                    <label className="form-label">현재 상태</label>
-                    <select name="f_status" className="form-input bg-white text-blue-600 font-black cursor-pointer" defaultValue={clean(slotModal.data.계약_상태) || '미분양'}>
-                      <option value="미분양">미분양</option><option value="예약">예약</option><option value="홀딩">홀딩</option><option value="안치">안치</option>
-                    </select>
-                  </div>
+                  <div className="pl-4 w-32"><label className="form-label">현재 상태</label><select name="f_status" className="form-input bg-white text-blue-600 font-black cursor-pointer" defaultValue={clean(slotModal.data.계약_상태) || '미분양'}><option value="미분양">미분양</option><option value="예약">예약</option><option value="홀딩">홀딩</option><option value="안치">안치</option></select></div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div><label className="form-label">계약자</label><input name="f_contractor" type="text" className="form-input" defaultValue={clean(slotModal.data.계약자)} /></div>
@@ -957,7 +962,7 @@
                   <div><label className="form-label text-amber-600">관리비 (연)</label><input name="f_fee" type="text" className="form-input bg-amber-50 border-amber-200 text-amber-700" defaultValue={formatMoney(slotModal.data.관리비)} /></div>
                 </div>
                 <div><label className="form-label">비고 (현장 메모)</label><textarea name="f_memo" className="form-input min-h-[80px]" defaultValue={clean(slotModal.data.메모)}></textarea></div>
-                <div className="pt-2"><button type="submit" className="w-full py-3 bg-blue-600 text-white font-black rounded-xl text-sm shadow-lg">지도 DB 반영</button></div>
+                <div className="pt-2"><button type="submit" className="w-full py-3 bg-blue-600 text-white font-black rounded-xl text-sm hover:bg-blue-700 transition shadow-lg shadow-blue-500/30">지도 데이터 수정 (DB 반영)</button></div>
               </form>
             )}
           </Modal>
@@ -965,27 +970,25 @@
       );
     }
 
-    // 🧩 MODULE 7: JAKE WORKSPACE (프로젝트 3탭, 연락처 태그, 각인 폴더링)
+    // 🧩 MODULE 7: JAKE WORKSPACE
     function ProjectsWorkspace() {
        const [projects, setProjects] = useState([]);
        const [modal, setModal] = useState({ isOpen: false, data: null, activeTab: 'info' });
 
        const fetchProjects = async () => {
-           try {
-               const res = await supabaseClient.from('project_db').select('*').order('id', {ascending: false});
-               if(res.data) setProjects(res.data);
-           } catch(e) {}
+           try { const res = await supabaseClient.from('project_db').select('*').order('id', {ascending: false}); if(res.data) setProjects(res.data); } catch(e) {}
        };
        useEffect(() => { fetchProjects(); }, []);
 
        const saveProject = async (e) => {
            e.preventDefault();
            const payload = { title: e.target.p_title.value, personnel: e.target.p_manager.value, end_date: e.target.p_deadline.value, status: e.target.p_status.value };
-           if(modal.data?.id) { await supabaseClient.from('project_db').update(payload).eq('id', modal.data.id); } 
-           else { payload.id = 'proj-' + Date.now(); await supabaseClient.from('project_db').insert(payload); }
+           let err;
+           if(modal.data?.id) { const res = await supabaseClient.from('project_db').update(payload).eq('id', modal.data.id); err = res.error; } 
+           else { payload.id = 'proj-' + Date.now(); const res = await supabaseClient.from('project_db').insert(payload); err = res.error; }
+           if(err) { alert("추가 실패: " + err.message); return; }
            setModal({isOpen:false, data:null}); fetchProjects();
        };
-
        const moveProject = async (id, newStatus) => { await supabaseClient.from('project_db').update({status: newStatus}).eq('id', id); fetchProjects(); };
 
        return (
@@ -1046,31 +1049,48 @@
        )
     }
 
+    // ✅ 풀스크린 회의록 & 현안 필터링 탑재
     function MinutesWorkspace() {
        const [minutes, setMinutes] = useState([]);
+       const [issues, setIssues] = useState([]);
+       const [todayEvents, setTodayEvents] = useState({ burial: 0, sales: 0 });
        const [modal, setModal] = useState({ isOpen: false, data: null });
+       const [issueFilter, setIssueFilter] = useState('전체');
+       const [toggleIssues, setToggleIssues] = useState(false);
        
-       const fetchMinutes = async () => {
+       const fetchData = async () => {
            try {
-               const res = await supabaseClient.from('meeting_logs').select('*').order('meeting_date', {ascending: false});
-               if(res.data) setMinutes(res.data);
+               const [mRes, iRes, bRes, sRes] = await Promise.all([
+                   supabaseClient.from('meeting_logs').select('*').order('meeting_date', {ascending: false}),
+                   supabaseClient.from('issue_db').select('*'),
+                   supabaseClient.from('burial_schedule').select('안치일').eq('안치일', getTodayStr()),
+                   supabaseClient.from('status_mgmt').select('답사일').eq('답사일', getTodayStr())
+               ]);
+               if(mRes.data) setMinutes(mRes.data);
+               if(iRes.data) setIssues(iRes.data);
+               setTodayEvents({ burial: bRes.data?.length || 0, sales: sRes.data?.length || 0 });
            } catch(e) {}
        };
-       useEffect(() => { fetchMinutes(); }, []);
+       useEffect(() => { fetchData(); }, []);
 
        const saveMinute = async (e) => {
            e.preventDefault();
            const payload = { meeting_date: e.target.m_date.value, topic: e.target.m_title.value, content: e.target.m_content.value, participants: e.target.m_part.value, weather: e.target.m_wea.value };
            if(modal.data?.id) await supabaseClient.from('meeting_logs').update(payload).eq('id', modal.data.id);
            else await supabaseClient.from('meeting_logs').insert(payload);
-           setModal({isOpen:false, data:null}); fetchMinutes();
+           setModal({isOpen:false, data:null}); fetchData();
        };
+
+       const filteredIssues = useMemo(() => {
+           if(issueFilter === '전체') return issues;
+           return issues.filter(i => i.status === issueFilter);
+       }, [issues, issueFilter]);
 
        return (
           <div className="bg-white p-4 sm:p-8 rounded-2xl shadow border border-slate-200 min-h-[50vh] w-full mt-4 mb-10">
              <div className="flex justify-between items-center mb-6 border-b pb-4">
-                <h2 className="text-xl sm:text-2xl font-black text-slate-800">📝 회의록</h2>
-                <button onClick={() => setModal({isOpen:true, data:null})} className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg shadow text-sm">+ 새 회의록</button>
+                <h2 className="text-xl sm:text-2xl font-black text-slate-800">📝 회의록 관리</h2>
+                <button onClick={() => setModal({isOpen:true, data:null})} className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg shadow text-sm hover:bg-indigo-700 transition">+ 새 회의록</button>
              </div>
              <div className="space-y-3">
                  {minutes.length === 0 ? <p className="text-center text-slate-400 py-10 font-bold">등록된 회의록이 없습니다.</p> : minutes.map(m => (
@@ -1081,30 +1101,56 @@
                  ))}
              </div>
 
-             <Modal isOpen={modal.isOpen} onClose={()=>setModal({isOpen:false, data:null})} title={modal.data ? "회의록 수정" : "새 회의록 작성"} isNested={true}>
-                 <div className="bg-indigo-50 p-3 rounded-lg mb-4 cursor-pointer flex justify-between items-center">
-                    <span className="font-bold text-sm text-indigo-800">📊 오늘 안치/답사 현황 불러오기</span>
-                    <span className="text-xs">▼</span>
-                 </div>
-                 <div className="bg-indigo-50 p-3 rounded-lg mb-4 cursor-pointer flex justify-between items-center">
-                    <span className="font-bold text-sm text-indigo-800">🎯 미해결 현안(이슈) 불러오기</span>
-                    <span className="text-xs">▼</span>
-                 </div>
-                 <form onSubmit={saveMinute} className="space-y-4">
-                     <div className="grid grid-cols-2 gap-3">
-                         <div className="input-group"><label className="form-label">회의 일자</label><input name="m_date" type="date" className="form-input" defaultValue={modal.data?.meeting_date || getTodayStr()} required /></div>
-                         <div className="input-group"><label className="form-label">날씨</label><input name="m_wea" type="text" className="form-input" defaultValue={modal.data?.weather} /></div>
+             {/* ✅ 풀스크린 락 모달 */}
+             <Modal isOpen={modal.isOpen} onClose={()=>setModal({isOpen:false, data:null})} title={modal.data ? "회의록 상세" : "새 회의록 작성"} fullScreen={true} isNested={true}>
+                 <div className="max-w-4xl mx-auto py-6">
+                     <div className="bg-indigo-50 p-4 rounded-xl mb-4 border border-indigo-100 flex justify-between items-center">
+                        <span className="font-black text-indigo-800">📊 오늘 일정 요약</span>
+                        <span className="text-sm font-bold text-indigo-600">안치 {todayEvents.burial}건 / 답사 {todayEvents.sales}건</span>
                      </div>
-                     <div className="input-group"><label className="form-label">참여자</label><input name="m_part" type="text" className="form-input" defaultValue={modal.data?.participants} /></div>
-                     <div className="input-group"><label className="form-label">안건 / 제목</label><input name="m_title" type="text" className="form-input" defaultValue={modal.data?.topic} required /></div>
-                     <div className="input-group"><label className="form-label">회의 내용 (마크다운 STT)</label><textarea name="m_content" className="form-input min-h-[250px] font-mono text-sm leading-relaxed" defaultValue={modal.data?.content} placeholder="STT 요약 결과를 이곳에 붙여넣으세요..."></textarea></div>
-                     <div className="flex pt-2"><button type="submit" className="w-full py-3 bg-indigo-600 text-white font-black rounded-xl text-sm shadow-lg">DB 저장</button></div>
-                 </form>
+                     
+                     <div className="bg-slate-50 p-4 rounded-xl mb-6 border border-slate-200">
+                        <div className="flex justify-between items-center cursor-pointer" onClick={() => setToggleIssues(!toggleIssues)}>
+                            <span className="font-black text-slate-800">🎯 미해결 현안(이슈) 목록</span>
+                            <span className="text-sm text-slate-500">{toggleIssues ? '▲ 닫기' : '▼ 열기'}</span>
+                        </div>
+                        {toggleIssues && (
+                            <div className="mt-4 pt-4 border-t border-slate-200">
+                                <div className="flex gap-2 mb-3">
+                                    {['전체', '시작전', '진행중', '보류', '완료'].map(f => (
+                                        <button key={f} onClick={()=>setIssueFilter(f)} className={`px-3 py-1 rounded-full text-xs font-bold ${issueFilter === f ? 'bg-slate-800 text-white' : 'bg-white border text-slate-500 hover:bg-slate-100'}`}>{f}</button>
+                                    ))}
+                                </div>
+                                <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-2">
+                                    {filteredIssues.map(i => (
+                                        <div key={i.id} className="p-2 bg-white border rounded text-sm flex justify-between items-center">
+                                            <span className="font-bold">{i.title}</span>
+                                            <span className="text-[10px] bg-slate-100 px-2 py-1 rounded">{i.status}</span>
+                                        </div>
+                                    ))}
+                                    {filteredIssues.length === 0 && <p className="text-xs text-slate-400">해당 상태의 현안이 없습니다.</p>}
+                                </div>
+                            </div>
+                        )}
+                     </div>
+
+                     <form onSubmit={saveMinute} className="space-y-4">
+                         <div className="grid grid-cols-2 gap-4">
+                             <div className="input-group"><label className="form-label">회의 일자</label><input name="m_date" type="date" className="form-input" defaultValue={modal.data?.meeting_date || getTodayStr()} required /></div>
+                             <div className="input-group"><label className="form-label">날씨</label><input name="m_wea" type="text" className="form-input" defaultValue={modal.data?.weather} /></div>
+                         </div>
+                         <div className="input-group"><label className="form-label">참여자</label><input name="m_part" type="text" className="form-input" defaultValue={modal.data?.participants} /></div>
+                         <div className="input-group"><label className="form-label">안건 / 제목</label><input name="m_title" type="text" className="form-input text-lg py-3" defaultValue={modal.data?.topic} required /></div>
+                         <div className="input-group"><label className="form-label">회의 내용 (STT / 마크다운 입력)</label><textarea name="m_content" className="form-input min-h-[300px] font-mono text-sm leading-relaxed bg-slate-50 focus:bg-white" defaultValue={modal.data?.content} placeholder="클로바노트/ChatGPT STT 요약 결과를 이곳에 붙여넣으세요..."></textarea></div>
+                         <div className="flex pt-4 pb-10"><button type="submit" className="w-full py-4 bg-indigo-600 text-white font-black rounded-xl text-lg shadow-xl hover:bg-indigo-700 hover:-translate-y-1 transition">💾 회의록 영구 저장</button></div>
+                     </form>
+                 </div>
              </Modal>
           </div>
        )
     }
 
+    // ✅ 각인 현황: 우선순위 정렬 및 아코디언 폴더링
     function EngravingWorkspace() {
        const [engravings, setEngravings] = useState([]);
        const [modal, setModal] = useState({ isOpen: false, data: null });
@@ -1117,7 +1163,9 @@
        };
        useEffect(() => { fetchEngravings(); }, []);
 
-       // ✅ 각인 데이터 계약번호 기준 폴더링 로직 (Group By)
+       // 상태 가중치 매핑 (급한 순서대로)
+       const statusWeight = { '접수': 1, '디자인완료': 2, '각인완료': 3, '설치완료': 4 };
+
        const folderList = useMemo(() => {
            const grouped = engravings.reduce((acc, item) => {
                const key = clean(item.계약번호) || '계약번호 없음';
@@ -1125,15 +1173,25 @@
            }, {});
            
            const result = Object.entries(grouped).map(([contract, items]) => {
-               // 1명이라도 설치완료가 아니면 진행중으로 판단
-               const hasActive = items.some(i => i.상태 !== '설치완료' && i.상태 !== '완료');
+               // 폴더 내 고인 중 가장 급한(작은 숫자) 상태 찾기
+               const highestUrgency = Math.min(...items.map(i => statusWeight[i.상태] || 1));
+               // 대표 상태 문자열 산출
+               const repStatus = Object.keys(statusWeight).find(k => statusWeight[k] === highestUrgency) || '접수';
+               const isDone = highestUrgency === 4;
+               
+               // 폴더 내 고인명 알약 생성을 위한 리스트
+               const names = items.map(i => i.고인명).join(', ');
                const earliestDate = items.reduce((min, i) => (!min || (i.안치_예정_일 && i.안치_예정_일 < min)) ? i.안치_예정_일 : min, null);
-               return { contract, items, hasActive, earliestDate };
+               
+               // 내부 정렬: 미래 날짜 위로
+               items.sort((a,b) => new Date(b.안치_예정_일||0) - new Date(a.안치_예정_일||0));
+
+               return { contract, items, isDone, repStatus, highestUrgency, earliestDate, names };
            });
            
+           // 전체 폴더 정렬: 1. 상태 급한순(숫자 낮을수록 위로), 2. 안치일 미래순
            result.sort((a,b) => {
-               if(a.hasActive && !b.hasActive) return -1;
-               if(!a.hasActive && b.hasActive) return 1;
+               if(a.highestUrgency !== b.highestUrgency) return a.highestUrgency - b.highestUrgency;
                return new Date(b.earliestDate||0) - new Date(a.earliestDate||0);
            });
            return result;
@@ -1144,9 +1202,16 @@
 
        const saveEngraving = async (e) => {
            e.preventDefault();
-           const payload = { 제작일: e.target.e_date.value, 상세좌표: e.target.e_loc.value, 고인명: e.target.e_name.value, 계약자: e.target.e_contractor.value, 규격: e.target.e_stone.value, 상태: e.target.e_status.value, 계약번호: e.target.e_contractNo.value };
-           if(modal.data?.uid) { await supabaseClient.from('engraving_mgmt').update(payload).eq('uid', modal.data.uid); } 
-           else { payload.uid = 'eng-' + Date.now(); await supabaseClient.from('engraving_mgmt').insert(payload); }
+           const payload = { 
+               제작일: e.target.e_date.value, 상세좌표: e.target.e_loc.value, 고인명: e.target.e_name.value, 
+               계약자: e.target.e_contractor.value, 규격: e.target.e_stone.value, 상태: e.target.e_status.value,
+               광중위치: e.target.e_gwang.value, 종교: e.target.e_rel.value, 표기: e.target.e_mark.value, 비고: e.target.e_memo.value, 계약번호: e.target.e_contractNo.value
+           };
+           let err;
+           if(modal.data?.uid) { const res = await supabaseClient.from('engraving_mgmt').update(payload).eq('uid', modal.data.uid); err = res.error; } 
+           else { payload.uid = 'eng-' + Date.now(); const res = await supabaseClient.from('engraving_mgmt').insert(payload); err = res.error; }
+           
+           if(err) { alert("저장 실패: " + err.message); return; }
            setModal({isOpen:false, data:null}); fetchEngravings();
        };
 
@@ -1157,47 +1222,63 @@
                 <button onClick={() => setModal({isOpen:true, data:null})} className="px-4 py-2 bg-stone-800 text-white font-bold rounded-lg shadow text-sm">+ 추가</button>
              </div>
              
-             <div className="space-y-4">
-                 {folderList.map(folder => (
-                     <div key={folder.contract} className="border border-slate-200 rounded-xl overflow-hidden">
-                         <div onClick={() => toggleFolder(folder.contract)} className={`p-4 cursor-pointer flex justify-between items-center ${folder.hasActive ? 'bg-stone-50' : 'bg-slate-50'}`}>
-                             <div>
-                                 <span className="font-black text-slate-800">📁 계약: {folder.contract}</span>
-                                 <span className="text-xs font-bold text-slate-500 ml-2">고인 {folder.items.length}명</span>
+             <div className="space-y-3">
+                 {folderList.map(folder => {
+                     const statusCols = { '접수':'bg-red-100 text-red-700', '디자인완료':'bg-amber-100 text-amber-700', '각인완료':'bg-blue-100 text-blue-700', '설치완료':'bg-slate-200 text-slate-500' };
+                     const badgeCol = statusCols[folder.repStatus] || 'bg-slate-100';
+
+                     return (
+                     <div key={folder.contract} className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                         <div onClick={() => toggleFolder(folder.contract)} className="p-4 cursor-pointer flex justify-between items-center hover:bg-slate-50 transition">
+                             <div className="flex items-center gap-3">
+                                 <span className="font-black text-slate-800 text-lg">📁 계약 {folder.contract}</span>
+                                 <div className="hidden sm:flex gap-1">
+                                     {folder.items.map((it, idx) => <span key={idx} className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-xs font-bold border border-slate-200">{it.고인명}</span>)}
+                                 </div>
                              </div>
                              <div className="flex items-center gap-3">
-                                 {folder.hasActive ? <span className="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded font-black">진행중</span> : <span className="text-[10px] bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded font-black">설치완료</span>}
-                                 <span className="text-slate-400 text-sm">{expandedFolders[folder.contract] ? '▲' : '▼'}</span>
+                                 <span className={`text-[11px] px-3 py-1 rounded-full font-black tracking-tight ${badgeCol}`}>{folder.repStatus}</span>
+                                 <span className="text-slate-400 text-sm font-black w-4 text-center">{expandedFolders[folder.contract] ? '▲' : '▼'}</span>
                              </div>
                          </div>
                          {expandedFolders[folder.contract] && (
-                             <div className="p-4 bg-white border-t border-slate-100 space-y-2">
+                             <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-2">
                                  {folder.items.map(item => (
-                                     <div key={item.uid} onClick={()=>setModal({isOpen:true, data:item})} className="flex justify-between items-center p-3 border rounded-lg hover:border-blue-300 cursor-pointer transition">
-                                         <div><span className="font-black">{item.고인명}</span> <span className="text-xs text-blue-600 font-bold ml-1">{item.상세좌표}</span></div>
-                                         <span className="text-xs font-bold bg-slate-100 px-2 py-1 rounded">{item.상태}</span>
+                                     <div key={item.uid} onClick={()=>setModal({isOpen:true, data:item})} className="flex justify-between items-center p-3 bg-white border border-slate-200 rounded-xl hover:border-blue-400 hover:shadow-md cursor-pointer transition">
+                                         <div>
+                                            <span className="font-black text-slate-800 text-[15px]">{item.고인명}</span> 
+                                            <span className="text-xs text-blue-600 font-bold ml-2 bg-blue-50 px-2 py-0.5 rounded">{item.상세좌표}</span>
+                                            <div className="text-[10px] text-slate-500 mt-1">안치예정: {item.안치_예정_일 || '미정'} | 규격: {item.규격||'미정'}</div>
+                                         </div>
+                                         <span className={`text-xs font-black px-2.5 py-1 rounded ${statusCols[item.상태]||'bg-slate-100'}`}>{item.상태}</span>
                                      </div>
                                  ))}
                              </div>
                          )}
                      </div>
-                 ))}
+                 )})}
              </div>
 
              <Modal isOpen={modal.isOpen} onClose={()=>setModal({isOpen:false, data:null})} title={modal.data ? "고인 각인정보 수정" : "새 고인 각인 추가"} isNested={true}>
                  <form onSubmit={saveEngraving} className="space-y-4">
                      <div className="grid grid-cols-2 gap-3">
-                         <div className="input-group"><label className="form-label">계약번호 (폴더 묶음용)</label><input name="e_contractNo" type="text" className="form-input border-blue-300" defaultValue={modal.data?.계약번호} required /></div>
-                         <div className="input-group"><label className="form-label">진행상태</label><select name="e_status" className="form-input" defaultValue={modal.data?.상태 || '접수'}><option>접수</option><option>디자인완료</option><option>각인완료</option><option>설치완료</option></select></div>
+                         <div className="input-group"><label className="form-label">계약번호 (폴더링 키)</label><input name="e_contractNo" type="text" className="form-input border-blue-300 bg-blue-50" defaultValue={modal.data?.계약번호} required /></div>
+                         <div className="input-group"><label className="form-label text-red-500">진행상태</label><select name="e_status" className="form-input border-red-200" defaultValue={modal.data?.상태 || '접수'}><option>접수</option><option>디자인완료</option><option>각인완료</option><option>설치완료</option></select></div>
                      </div>
                      <div className="grid grid-cols-2 gap-3">
-                         <div className="input-group"><label className="form-label">고인명</label><input name="e_name" type="text" className="form-input" defaultValue={modal.data?.고인명} required /></div>
-                         <div className="input-group"><label className="form-label text-blue-600">안치위치</label><input name="e_loc" type="text" className="form-input" defaultValue={modal.data?.상세좌표} /></div>
+                         <div className="input-group"><label className="form-label">고인명</label><input name="e_name" type="text" className="form-input text-lg" defaultValue={modal.data?.고인명} required /></div>
+                         <div className="input-group"><label className="form-label">계약자</label><input name="e_contractor" type="text" className="form-input" defaultValue={modal.data?.계약자} /></div>
                      </div>
                      <div className="grid grid-cols-2 gap-3">
-                         <div className="input-group"><label className="form-label">석재종류/규격</label><input name="e_stone" type="text" className="form-input" defaultValue={modal.data?.규격} /></div>
-                         <div className="input-group"><label className="form-label">발주일자</label><input name="e_date" type="date" className="form-input" defaultValue={modal.data?.제작일} /></div>
+                         <div className="input-group"><label className="form-label">안치위치</label><input name="e_loc" type="text" className="form-input" defaultValue={modal.data?.상세좌표} /></div>
+                         <div className="input-group"><label className="form-label">광중위치</label><input name="e_gwang" type="text" className="form-input" defaultValue={modal.data?.광중위치} placeholder="좌/우/합장" /></div>
                      </div>
+                     <div className="grid grid-cols-3 gap-3">
+                         <div className="input-group"><label className="form-label">석재종류</label><input name="e_stone" type="text" className="form-input" defaultValue={modal.data?.규격} placeholder="오석" /></div>
+                         <div className="input-group"><label className="form-label">종교</label><input name="e_rel" type="text" className="form-input" defaultValue={modal.data?.종교} placeholder="기독교 등" /></div>
+                         <div className="input-group"><label className="form-label">표기(한자등)</label><input name="e_mark" type="text" className="form-input" defaultValue={modal.data?.표기} /></div>
+                     </div>
+                     <div className="input-group"><label className="form-label">기타 비고 (생졸년 등)</label><textarea name="e_memo" className="form-input min-h-[60px]" defaultValue={clean(modal.data?.비고)}></textarea></div>
                      <div className="flex pt-2"><button type="submit" className="w-full py-3 bg-stone-800 text-white font-black rounded-xl text-sm shadow-lg">저장</button></div>
                  </form>
              </Modal>
@@ -1205,18 +1286,25 @@
        )
     }
 
+    // ✅ 주소록: 태그 시스템 & URL 하이퍼링크 탑재
     function ContactsWorkspace() {
        const [contacts, setContacts] = useState([]);
        const [modal, setModal] = useState({ isOpen: false, data: null });
        
-       // ✅ Multi-tag 엔진
        const [tags, setTags] = useState([]);
        const [tagInput, setTagInput] = useState('');
+       const [allExistingTags, setAllExistingTags] = useState([]);
 
        const fetchContacts = async () => {
            try {
                const res = await supabaseClient.from('contacts').select('*').order('company_name', {ascending: true});
-               if(res.data) setContacts(res.data);
+               if(res.data) {
+                   setContacts(res.data);
+                   // 존재하는 모든 태그 추출 (추천용)
+                   const tagSet = new Set();
+                   res.data.forEach(c => { if(c.job_type) c.job_type.split(',').forEach(t => tagSet.add(t.trim())); });
+                   tagSet.delete(''); setAllExistingTags(Array.from(tagSet));
+               }
            } catch(e) {}
        };
        useEffect(() => { fetchContacts(); }, []);
@@ -1230,18 +1318,21 @@
 
        const handleTagKey = (e) => {
            if(e.key === 'Enter') {
-               e.preventDefault();
-               const val = tagInput.trim();
+               e.preventDefault(); const val = tagInput.trim();
                if(val && !tags.includes(val)) setTags([...tags, val]);
                setTagInput('');
            }
        };
 
+       const addTagFromSuggest = (t) => { if(!tags.includes(t)) setTags([...tags, t]); };
+
        const saveContact = async (e) => {
            e.preventDefault();
-           const payload = { company_name: e.target.c_comp.value, manager_name: e.target.c_name.value, phone1: e.target.c_phone.value, job_type: tags.join(','), email: e.target.c_email.value, url: e.target.c_url.value };
-           if(modal.data?.id) await supabaseClient.from('contacts').update(payload).eq('id', modal.data.id);
-           else await supabaseClient.from('contacts').insert(payload);
+           const payload = { company_name: e.target.c_comp.value, manager_name: e.target.c_name.value, phone1: e.target.c_phone.value, phone2: e.target.c_phone2.value, job_type: tags.join(','), email: e.target.c_email.value, url: e.target.c_url.value, memo: e.target.c_memo.value };
+           let err;
+           if(modal.data?.id) { const res = await supabaseClient.from('contacts').update(payload).eq('id', modal.data.id); err = res.error; } 
+           else { const res = await supabaseClient.from('contacts').insert(payload); err = res.error; }
+           if(err) { alert("저장 실패: " + err.message); return; }
            setModal({isOpen:false, data:null}); fetchContacts();
        };
 
@@ -1249,19 +1340,20 @@
           <div className="bg-white p-4 sm:p-8 rounded-2xl shadow border border-slate-200 min-h-[50vh] w-full mt-4 mb-10">
              <div className="flex justify-between items-center mb-6 border-b pb-4">
                 <h2 className="text-xl sm:text-2xl font-black text-slate-800">📞 통합 주소록</h2>
-                <button onClick={() => openModal(null)} className="px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg shadow text-sm">+ 연락처 추가</button>
+                <button onClick={() => openModal(null)} className="px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg shadow text-sm hover:bg-emerald-700 transition">+ 연락처 추가</button>
              </div>
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                  {contacts.length === 0 ? <p className="col-span-2 text-center text-slate-400 py-10 font-bold">등록된 연락처가 없습니다.</p> : contacts.map(c => (
-                     <div key={c.id} onClick={()=>openModal(c)} className="p-4 border border-emerald-100 bg-emerald-50/30 rounded-xl flex justify-between items-center cursor-pointer hover:bg-emerald-50 transition shadow-sm">
-                         <div>
-                             <div className="flex gap-1 mb-1">
-                               {c.job_type ? c.job_type.split(',').map((t,i) => <span key={i} className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-black">{t}</span>) : <span className="text-[9px] text-slate-400">태그 없음</span>}
+                     <div key={c.id} onClick={()=>openModal(c)} className="p-4 border border-emerald-100 bg-emerald-50/30 rounded-xl flex justify-between items-center cursor-pointer hover:bg-emerald-50 transition shadow-sm relative">
+                         <div className="w-full pr-14">
+                             <div className="flex gap-1 mb-1.5 flex-wrap">
+                               {c.job_type ? c.job_type.split(',').map((t,i) => <span key={i} className="text-[9px] bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full font-black">{t}</span>) : <span className="text-[9px] text-slate-400">태그 없음</span>}
                              </div>
-                             <div className="font-black text-slate-800 text-lg mt-0.5">{c.company_name} <span className="text-sm font-medium text-slate-500 ml-1">{c.manager_name}</span></div>
-                             <div className="text-xs font-bold text-slate-600 mt-1">{c.phone1}</div>
+                             <div className="font-black text-slate-800 text-lg">{c.company_name} <span className="text-sm font-medium text-slate-500 ml-1">{c.manager_name}</span></div>
+                             <div className="text-xs font-bold text-slate-600 mt-1">📞 {c.phone1} {c.phone2 && ` / ${c.phone2}`}</div>
+                             {c.url && <div className="text-xs mt-1 truncate">{renderWithLinks(c.url)}</div>}
                          </div>
-                         <a href={`tel:${c.phone1}`} onClick={(e)=>e.stopPropagation()} className="bg-white border border-emerald-200 text-emerald-600 p-3 rounded-full hover:bg-emerald-100 transition shadow-sm">📞</a>
+                         <a href={`tel:${c.phone1}`} onClick={(e)=>e.stopPropagation()} className="absolute right-4 top-1/2 -translate-y-1/2 bg-white border border-emerald-200 text-emerald-600 p-3 rounded-full hover:bg-emerald-100 transition shadow-sm">📞</a>
                      </div>
                  ))}
              </div>
@@ -1270,25 +1362,39 @@
                  <form onSubmit={saveContact} className="space-y-4">
                      <div className="input-group">
                          <label className="form-label text-emerald-600">역할 태그 (엔터로 추가)</label>
-                         <div className="flex flex-wrap gap-2 mb-2 p-2 border rounded-lg min-h-[42px] bg-slate-50">
+                         <div className="flex flex-wrap gap-2 mb-2 p-2 border rounded-lg min-h-[42px] bg-slate-50 focus-within:border-emerald-500 focus-within:bg-white transition">
                              {tags.map(t => (
-                                 <span key={t} className="bg-emerald-200 text-emerald-800 px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1">
-                                    {t} <span onClick={()=>setTags(tags.filter(x=>x!==t))} className="cursor-pointer text-emerald-600 hover:text-red-500">×</span>
+                                 <span key={t} className="bg-emerald-200 text-emerald-800 border border-emerald-300 px-2 py-1 rounded-full text-xs font-black flex items-center gap-1 shadow-sm">
+                                    {t} <span onClick={()=>setTags(tags.filter(x=>x!==t))} className="cursor-pointer text-emerald-600 hover:text-red-500 ml-1">✕</span>
                                  </span>
                              ))}
-                             <input type="text" value={tagInput} onChange={e=>setTagInput(e.target.value)} onKeyDown={handleTagKey} className="bg-transparent outline-none text-sm font-bold w-20 flex-1" placeholder="조경, 목수 등..." />
+                             <input type="text" value={tagInput} onChange={e=>setTagInput(e.target.value)} onKeyDown={handleTagKey} className="bg-transparent outline-none text-sm font-bold w-24 flex-1" placeholder="조경, 목수 등..." />
                          </div>
+                         {/* 추천 태그 알약들 */}
+                         {allExistingTags.length > 0 && (
+                             <div className="flex flex-wrap gap-1 mt-1">
+                                 <span className="text-[10px] text-slate-400 mr-1 mt-0.5 font-bold">추천:</span>
+                                 {allExistingTags.map(t => (
+                                     <button key={t} type="button" onClick={()=>addTagFromSuggest(t)} className="text-[10px] bg-slate-100 border border-slate-200 text-slate-600 px-2 py-0.5 rounded-full hover:bg-slate-200">{t}</button>
+                                 ))}
+                             </div>
+                         )}
                      </div>
                      <div className="grid grid-cols-2 gap-3">
-                         <div className="input-group"><label className="form-label">업체명</label><input name="c_comp" type="text" className="form-input" defaultValue={modal.data?.company_name} required /></div>
+                         <div className="input-group"><label className="form-label">업체명</label><input name="c_comp" type="text" className="form-input text-lg" defaultValue={modal.data?.company_name} required /></div>
                          <div className="input-group"><label className="form-label">담당자명</label><input name="c_name" type="text" className="form-input" defaultValue={modal.data?.manager_name} /></div>
                      </div>
                      <div className="grid grid-cols-2 gap-3">
-                         <div className="input-group"><label className="form-label">연락처</label><input name="c_phone" type="text" className="form-input" defaultValue={modal.data?.phone1} required /></div>
-                         <div className="input-group"><label className="form-label">이메일</label><input name="c_email" type="email" className="form-input" defaultValue={modal.data?.email} /></div>
+                         <div className="input-group"><label className="form-label">연락처 1</label><input name="c_phone" type="text" className="form-input" defaultValue={modal.data?.phone1} required /></div>
+                         <div className="input-group"><label className="form-label">연락처 2</label><input name="c_phone2" type="text" className="form-input" defaultValue={modal.data?.phone2} /></div>
                      </div>
-                     <div className="input-group"><label className="form-label">웹사이트 (URL)</label><input name="c_url" type="url" className="form-input" defaultValue={modal.data?.url} /></div>
-                     <div className="flex pt-2"><button type="submit" className="w-full py-3 bg-emerald-600 text-white font-black rounded-xl text-sm shadow-lg">DB 저장</button></div>
+                     <div className="input-group"><label className="form-label">이메일</label><input name="c_email" type="email" className="form-input" defaultValue={modal.data?.email} /></div>
+                     <div className="input-group"><label className="form-label">웹사이트 (URL)</label><input name="c_url" type="text" className="form-input" defaultValue={modal.data?.url} placeholder="https://..." /></div>
+                     <div className="input-group"><label className="form-label">비고 메모</label><textarea name="c_memo" className="form-input min-h-[60px]" defaultValue={modal.data?.memo}></textarea></div>
+                     
+                     <div className="flex gap-2 pt-2">
+                         <button type="submit" className="w-full py-3 bg-emerald-600 text-white font-black rounded-xl text-sm hover:bg-emerald-700 shadow-lg">DB 저장</button>
+                     </div>
                  </form>
              </Modal>
           </div>
@@ -1305,14 +1411,16 @@
         const handleResize = () => { if (window.innerWidth > 1024) setIsSidebarOpen(true); else setIsSidebarOpen(false); };
         window.addEventListener('resize', handleResize); return () => window.removeEventListener('resize', handleResize);
       }, []);
+
       useEffect(() => { fetch('/map_layout.json').then(res => res.json()).then(json => setLayoutData(json)).catch(err => console.error(err)); }, []);
 
       return (
         <div className="flex h-screen overflow-hidden bg-slate-900">
           {isSidebarOpen && <div className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-sm transition-opacity" onClick={() => setIsSidebarOpen(false)} />}
+          
           <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 border-r border-slate-800 text-slate-300 transform transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:hidden'} flex flex-col shadow-2xl lg:shadow-none`}>
             <div className="p-6 border-b border-slate-800 flex justify-between items-center shrink-0">
-              <h1 className="text-xl font-black text-white tracking-tighter">JAKE WorkOS <span className="text-[10px] bg-emerald-500 px-1.5 py-0.5 rounded ml-1 text-slate-900">V42</span></h1>
+              <h1 className="text-xl font-black text-white tracking-tighter">JAKE WorkOS <span className="text-[10px] bg-emerald-500 px-1.5 py-0.5 rounded ml-1 text-slate-900">V43</span></h1>
               <button className="lg:hidden text-slate-400 hover:text-white transition font-bold" onClick={() => setIsSidebarOpen(false)}>✕</button>
             </div>
             <nav className="p-4 space-y-8 overflow-y-auto flex-1 custom-scrollbar">
@@ -1325,17 +1433,19 @@
                   <button onClick={() => {setActiveTab('stats'); if(window.innerWidth<1024)setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'stats' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'hover:bg-slate-800'}`}>📈 통계/분석</button>
                 </div>
               </div>
+              
               <div>
                 <p className="text-[10px] font-black text-indigo-400 mb-3 ml-2 uppercase tracking-widest">Jake Personal</p>
                 <div className="space-y-1">
                   <button onClick={() => {setActiveTab('projects'); if(window.innerWidth<1024)setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'projects' ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-slate-800'}`}>🚀 프로젝트 관리</button>
-                  <button onClick={() => {setActiveTab('minutes'); if(window.innerWidth<1024)setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'minutes' ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-slate-800'}`}>📝 회의록</button>
+                  <button onClick={() => {setActiveTab('minutes'); if(window.innerWidth<1024)setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'minutes' ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-slate-800'}`}>📝 회의록 관리</button>
                   <button onClick={() => {setActiveTab('engraving'); if(window.innerWidth<1024)setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'engraving' ? 'bg-stone-600 text-white shadow-lg' : 'hover:bg-slate-800'}`}>⚰️ 각인/발주 현황</button>
                   <button onClick={() => {setActiveTab('contacts'); if(window.innerWidth<1024)setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'contacts' ? 'bg-emerald-600 text-white shadow-lg' : 'hover:bg-slate-800'}`}>📞 연락처 (주소록)</button>
                 </div>
               </div>
             </nav>
           </aside>
+
           <main className="flex-1 flex flex-col h-screen overflow-y-auto overflow-x-hidden bg-[#F8FAFC]">
             <header className="h-14 bg-white border-b border-slate-200 flex items-center px-4 justify-between shrink-0 sticky top-0 z-[90] shadow-sm">
               <div className="flex items-center">
@@ -1347,11 +1457,13 @@
                 </h2>
               </div>
             </header>
+            
             <div className="w-full p-2 md:p-4 pb-20">
               {activeTab === 'dash' && <DashboardView layoutData={layoutData} />}
               {activeTab === 'field' && <FieldView layoutData={layoutData} />}
               {activeTab === 'hr' && <HrView />}
               {activeTab === 'stats' && <StatsView />}
+              
               {activeTab === 'projects' && <ProjectsWorkspace />}
               {activeTab === 'minutes' && <MinutesWorkspace />}
               {activeTab === 'engraving' && <EngravingWorkspace />}
