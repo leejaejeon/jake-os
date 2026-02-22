@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Jake WorkOS V31 - Master Logs & Chart Fix</title>
+  <title>Jake WorkOS V32 - Full Workspace</title>
   
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -15,9 +15,7 @@
 
   <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
-    
     body { font-family: 'Pretendard', sans-serif; background-color: #f1f5f9; color: #1e293b; -webkit-font-smoothing: antialiased; }
-    
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-track { background: #f8fafc; border-radius: 4px; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; border: 2px solid #f8fafc; }
@@ -52,7 +50,6 @@
     const { useState, useEffect, useMemo, useRef } = React;
     Chart.register(ChartDataLabels);
 
-    // Supabase 접속 정보
     const SUPABASE_URL = 'https://lqccxnciiajwqdmpwjdv.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxY2N4bmNpaWFqd3FkbXB3amR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MjA3MTMsImV4cCI6MjA4NzA5NjcxM30.L23-eq-DIPsbONOeX-xQ8UcMb7gtgTTTRpkaSm9HTw4';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -82,7 +79,6 @@
       'B6/가/1-12':[47,52,53,52,53,53,54,54,54,53,55,54,50], 'B6/가/13-14':[75,75,75,75,75,75,75,75,75] 
     };
 
-    // 근태 가중치 상수
     const EMPLOYEES = ["조규태 사무장", "이중원 팀장", "이장순 과장", "허성백 과장", "전광숙 실장", "이재전 과장", "박우석 차장"];
     const EMP_COLORS = ["#FF6B6B", "#FF9F43", "#FDCB6E", "#55E6C1", "#4BCFFA", "#5F27CD", "#D980FA"];
     const EMP_WEIGHTS = {
@@ -95,11 +91,10 @@
       "박우석 차장":   { contract: 1, guide: 1, burial: 0, landscaping: 1 }
     };
 
-    // 🚀 [신규] 시스템 로그 자동 기록기
     const logAction = async (category, actionType, targetData, details) => {
         try {
             await supabaseClient.from('system_logs').insert({
-                worker: 'JAKE (Admin)', // 권한 시스템 전까지 임시 고정
+                worker: 'JAKE (Admin)', 
                 action_type: actionType,
                 target_data: targetData,
                 details: details
@@ -114,7 +109,7 @@
         if (this.state.hasError) {
           return (
             <div className="p-8 m-4 bg-rose-50 border-2 border-rose-500 rounded-xl shadow-lg">
-              <h1 className="text-xl font-black text-rose-700 mb-2">🚨 V31 렌더링 에러</h1>
+              <h1 className="text-xl font-black text-rose-700 mb-2">🚨 V32 렌더링 에러</h1>
               <pre className="text-xs bg-white p-4 rounded border border-rose-200 overflow-auto">{this.state.error?.toString()}</pre>
             </div>
           );
@@ -202,7 +197,6 @@
               <h3 className="text-lg font-black text-white tracking-tight">📍 지도에서 위치 선택</h3>
               <button onClick={onClose} className="p-1 bg-slate-700 hover:bg-slate-600 rounded-lg text-white font-bold transition">닫기</button>
             </div>
-            
             <div className="flex gap-2 overflow-x-auto p-3 border-b border-slate-200 bg-slate-100 no-scrollbar shrink-0" style={{ WebkitOverflowScrolling: 'touch' }}>
               {SECTION_LIST.map(s => (
                 <button key={s} onClick={() => setArea(s)} className={`flex-none px-4 py-2 rounded-lg font-bold text-[13px] whitespace-nowrap transition-all border border-slate-300 ${area === s ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
@@ -210,7 +204,6 @@
                 </button>
               ))}
             </div>
-
             <div className="flex-1 overflow-auto bg-[#F8FAFC] p-4 relative">
               {loading ? (
                 <div className="flex h-full items-center justify-center font-black text-slate-400">데이터를 불러오는 중...</div>
@@ -290,7 +283,6 @@
 
       useEffect(() => { fetchAll(); }, []);
 
-      // 📈 차트 로직 픽스: '계약번호' 기준으로 묶되, 계약번호 없으면 개별 카운트
       useEffect(() => {
         if (!chartRef.current || events.length === 0) return;
         let labels = []; let dataCounts = [];
@@ -336,16 +328,25 @@
         return days;
       }, [currentDate, events]);
 
+      const getCleanedHR = (data) => {
+        let map = {};
+        data.forEach(r => { if(r.work_date && r.worker_name) map[`${r.work_date}_${r.worker_name}`] = r.status; });
+        return map;
+      };
+
       const headlineStats = useMemo(() => {
         const targetDate = dailyModal.isOpen ? dailyModal.dateStr : getTodayStr();
         const todaysEvents = events.filter(e => e.date === targetDate);
         const burials = todaysEvents.filter(e => e.type === 'burial').length;
         const sales = todaysEvents.filter(e => e.type === 'sales' && (e.status === '답사대기' || e.status === '답사완료')).length;
+        
         let hrCount = 0;
-        hrData.forEach(h => {
-            if(h.work_date === targetDate) {
-                if(['휴무','연차','병가'].includes(h.status)) hrCount += 1;
-                else if(['오전반차','오후반차','조퇴'].includes(h.status)) hrCount += 0.5;
+        const cln = getCleanedHR(hrData);
+        EMPLOYEES.forEach(emp => {
+            const st = cln[`${targetDate}_${emp}`];
+            if(st) {
+                if(['휴무','연차','병가'].includes(st)) hrCount += 1;
+                else if(['오전반차','오후반차','조퇴'].includes(st)) hrCount += 0.5;
             }
         });
         return { targetDate, burials, sales, hr: hrCount };
@@ -360,6 +361,7 @@
         setDailyModal({ isOpen: true, dateStr, events: dayEvents });
       };
 
+      // ⚡ 안전장치가 추가된 저장 엔진
       const saveSchedule = async (e) => {
           e.preventDefault();
           const targetLoc = gwangjung ? `${selectedLocBase}[${gwangjung}]` : selectedLocBase;
@@ -371,12 +373,21 @@
               위치: targetLoc,
               비고: e.target.sch_note.value
           };
+          
+          let err;
           if(schModal.data?.id) {
-              await supabaseClient.from('burial_schedule').update(payload).eq('id', schModal.data.id);
-              logAction('안치일정', '수정', payload.고인명, `날짜: ${payload.안치일}`);
+              const res = await supabaseClient.from('burial_schedule').update(payload).eq('id', schModal.data.id);
+              err = res.error;
+              if(!err) logAction('안치일정', '수정', payload.고인명, `날짜: ${payload.안치일}`);
           } else {
-              await supabaseClient.from('burial_schedule').insert(payload);
-              logAction('안치일정', '신규등록', payload.고인명, `날짜: ${payload.안치일}`);
+              const res = await supabaseClient.from('burial_schedule').insert(payload);
+              err = res.error;
+              if(!err) logAction('안치일정', '신규등록', payload.고인명, `날짜: ${payload.안치일}`);
+          }
+          
+          if(err) {
+              alert(`저장 실패: ${err.message}\n(DB 컬럼명이 맞는지 확인해주세요)`);
+              return;
           }
           setSchModal({isOpen:false, data:null});
           fetchAll(); 
@@ -384,6 +395,7 @@
 
       const saveSales = async (e) => {
           e.preventDefault();
+          // CSV 헤더 기반으로 컬럼명 안전하게 매핑
           const payload = {
               등록일: e.target.s_regDate.value || new Date().toISOString(),
               답사일: e.target.s_visitDate.value,
@@ -396,12 +408,21 @@
               안치확정일: e.target.s_confirmDate.value,
               비고메모: e.target.s_memo.value
           };
+          
+          let err;
           if(salesModal.data?.id) {
-              await supabaseClient.from('status_mgmt').update(payload).eq('id', salesModal.data.id);
-              logAction('영업현황', '수정', payload["고객(고인)명"], `상태: ${payload.현재상태}`);
+              const res = await supabaseClient.from('status_mgmt').update(payload).eq('id', salesModal.data.id);
+              err = res.error;
+              if(!err) logAction('영업현황', '수정', payload["고객(고인)명"], `상태: ${payload.현재상태}`);
           } else {
-              await supabaseClient.from('status_mgmt').insert(payload);
-              logAction('영업현황', '신규등록', payload["고객(고인)명"], `담당: ${payload.영업자사명}/${payload.영업자성함}`);
+              const res = await supabaseClient.from('status_mgmt').insert(payload);
+              err = res.error;
+              if(!err) logAction('영업현황', '신규등록', payload["고객(고인)명"], `담당: ${payload.영업자사명}`);
+          }
+          
+          if(err) {
+              alert(`저장 실패: ${err.message}\n(DB의 '고객(고인)명' 등 컬럼명이 정확한지 확인해주세요)`);
+              return;
           }
           setSalesModal({isOpen:false, data:null});
           fetchAll();
@@ -409,7 +430,6 @@
 
       return (
         <div className="space-y-6 max-w-7xl mx-auto flex flex-col relative w-full">
-          
           <div className="bg-slate-800 rounded-2xl p-4 shadow-lg text-white flex justify-between items-center">
             <div>
               <p className="text-xs font-bold text-slate-400 mb-1">
@@ -448,12 +468,12 @@
                 <div className="grid grid-cols-7 gap-px">
                   {['월','화','수','목','금','토','일'].map((d,i)=>(<div key={d} className={`py-2 text-center text-sm font-black bg-white ${i===6?'text-red-500':i===5?'text-blue-500':'text-slate-700'}`}>{d}</div>))}
                 </div>
+                {/* ✅ 수정됨: 최상위 셀에만 커서 포인터, 내부는 이벤트 무시 */}
                 <div className="grid grid-cols-7 gap-px">
                   {calendarDays.map((d,i)=>(
                     <div key={i} onClick={()=>d && handleCellClick(d.dateStr, d.dayEvents)} className={`calendar-cell flex flex-col ${!d?'bg-slate-50 cursor-default':'cursor-pointer'}`}>
                       {d && (
                         <>
-                          {/* ✅ 팝업 클릭 안됨 픽스: 내부 텍스트들에 pointer-events-none 적용 */}
                           <div className={`pointer-events-none text-right text-xs font-bold p-1 ${getTodayStr() === d.dateStr ? 'text-white bg-blue-600 inline-block self-end rounded-md px-2' : 'text-slate-500'}`}>{d.day}</div>
                           <div className="pointer-events-none space-y-1 pb-1">
                             {d.dayEvents.map((ev,idx)=>{
@@ -732,7 +752,6 @@
           let warnings = [];
           if (cap.contract <= 1) warnings.push('계약');
           if (salesCount > 0 && cap.guide <= 2) warnings.push('안내');
-          // ✅ 픽스됨: 안치 4건 이상일 때만 경고
           if (burialCount >= 4 && cap.burial <= 2) warnings.push('안치');
 
           days.push({ day: i, dateStr: ds, cap, warnings });
@@ -760,7 +779,7 @@
           }));
           
           await supabaseClient.from('hr_management').insert(insertData);
-          logAction('근태관리', '수정', dateStr, '해당 일자 근태 일괄 저장됨');
+          logAction('근태관리', '수정', dateStr, '근태 일괄 저장됨');
           setDayModal({isOpen:false, dateStr:'', data:{}});
           fetchHRAndEvents();
       };
@@ -786,14 +805,13 @@
                     <div key={i} onClick={()=>d && handleCellClick(d.dateStr)} className={`calendar-cell flex flex-col ${!d?'bg-slate-50 cursor-default':'cursor-pointer'}`}>
                       {d && (
                         <>
-                          {/* ✅ 픽스됨: pointer-events-none 적용으로 모바일 클릭 방해 해제 */}
                           <div className={`pointer-events-none text-right text-xs font-bold p-1 ${getTodayStr() === d.dateStr ? 'text-white bg-blue-600 inline-block self-end rounded-md px-2' : 'text-slate-500'}`}>{d.day}</div>
                           <div className="pointer-events-none space-y-1 pb-1 flex-1">
                             {EMPLOYEES.map((emp, idx) => {
                                const st = dayModal.data[emp] || getCleanedHR()[`${d.dateStr}_${emp}`];
                                if(st && st !== '출근') {
                                  let c = EMP_COLORS[idx]; let isFull = ['휴무','연차','병가'].includes(st);
-                                 return <div key={emp} className="px-1.5 py-0.5 rounded text-[10px] font-bold truncate border" style={{backgroundColor: isFull?c:'white', color: isFull?'white':c, borderColor: c}}>{emp} {st.includes('반차')?st.substring(0,2):''}</div>
+                                 return <div key={emp} className="px-1.5 py-0.5 rounded text-[10px] font-bold truncate border pointer-events-none" style={{backgroundColor: isFull?c:'white', color: isFull?'white':c, borderColor: c}}>{emp} {st.includes('반차')?st.substring(0,2):''}</div>
                                }
                                return null;
                             })}
@@ -917,7 +935,7 @@
           };
           if(slotModal.data?.id) {
               await supabaseClient.from('field_data').update(payload).eq('id', slotModal.data.id);
-              logAction('현장관리', '수정', `${area} ${slotModal.data.위치_번호}`, `상태: ${payload.계약_상태}, 이름: ${payload.성함}`);
+              logAction('현장관리', '수정', `${area} ${slotModal.data.위치_번호}`, `상태: ${payload.계약_상태}`);
           } else {
               await supabaseClient.from('field_data').insert(payload);
           }
@@ -1022,6 +1040,95 @@
       );
     }
 
+    // 🚀 워크스페이스 모듈들 (로컬 상태 칸반 등)
+    function ProjectsWorkspace() {
+       return (
+          <div className="bg-white p-8 rounded-2xl shadow border border-slate-200 min-h-[50vh] mt-4">
+             <div className="flex justify-between items-center mb-6 border-b pb-4">
+                <h2 className="text-2xl font-black text-slate-800">🚀 프로젝트 칸반 보드</h2>
+                <button className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg shadow">+ 태스크 추가</button>
+             </div>
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* To Do */}
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 min-h-[300px]">
+                   <h3 className="font-black text-slate-600 mb-3 flex justify-between">대기중 (To Do) <span className="bg-slate-200 px-2 rounded-full">1</span></h3>
+                   <div className="bg-white p-3 rounded-lg shadow-sm border border-slate-100 cursor-pointer hover:shadow-md transition">
+                      <p className="font-bold text-sm text-slate-800">C1/가 구역 잔디 보수</p>
+                      <p className="text-[10px] text-slate-500 mt-2">마감: 2026-03-01 | 담당: 이장순</p>
+                   </div>
+                </div>
+                {/* In Progress */}
+                <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 min-h-[300px]">
+                   <h3 className="font-black text-indigo-800 mb-3 flex justify-between">진행중 (Doing) <span className="bg-indigo-200 px-2 rounded-full">1</span></h3>
+                   <div className="bg-white p-3 rounded-lg shadow-sm border border-indigo-100 cursor-pointer hover:shadow-md transition">
+                      <p className="font-bold text-sm text-slate-800">안치 관리 시스템(WorkOS) 개발</p>
+                      <p className="text-[10px] text-indigo-500 mt-2">진척도: 75% | 담당: Jake</p>
+                   </div>
+                </div>
+                {/* Done */}
+                <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 min-h-[300px]">
+                   <h3 className="font-black text-emerald-800 mb-3 flex justify-between">완료 (Done) <span className="bg-emerald-200 px-2 rounded-full">0</span></h3>
+                   <div className="text-center text-xs text-emerald-600/50 font-bold mt-10">완료된 태스크가 없습니다</div>
+                </div>
+             </div>
+          </div>
+       )
+    }
+
+    function MinutesWorkspace() {
+       return (
+          <div className="bg-white p-8 rounded-2xl shadow border border-slate-200 text-center min-h-[50vh] flex flex-col justify-center items-center mt-4">
+             <div className="text-4xl mb-4">📝</div>
+             <h2 className="text-2xl font-black text-slate-800 mb-2">회의록 관리소</h2>
+             <p className="text-slate-500 font-bold">경영진 및 현장 회의 요약 기록. (DB 테이블 설계 대기중)</p>
+          </div>
+       )
+    }
+
+    function EngravingWorkspace() {
+       return (
+          <div className="bg-white p-8 rounded-2xl shadow border border-slate-200 min-h-[50vh] mt-4">
+             <div className="flex justify-between items-center mb-6 border-b pb-4">
+                <h2 className="text-2xl font-black text-slate-800">⚰️ 비석 각인/발주 현황</h2>
+                <button className="px-4 py-2 bg-stone-800 text-white font-bold rounded-lg shadow">+ 신규 발주</button>
+             </div>
+             <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                   <thead>
+                      <tr className="bg-slate-100 text-slate-600 text-xs font-black uppercase">
+                         <th className="p-3 border-b">발주일자</th>
+                         <th className="p-3 border-b">안치위치</th>
+                         <th className="p-3 border-b">고인명</th>
+                         <th className="p-3 border-b">석재종류</th>
+                         <th className="p-3 border-b">진행상태</th>
+                      </tr>
+                   </thead>
+                   <tbody>
+                      <tr className="hover:bg-slate-50">
+                         <td className="p-3 border-b text-sm font-bold text-slate-700">2026-02-20</td>
+                         <td className="p-3 border-b text-sm font-bold text-blue-600">A6/가 1-15</td>
+                         <td className="p-3 border-b text-sm font-bold">홍길동</td>
+                         <td className="p-3 border-b text-xs">오석 (블랙)</td>
+                         <td className="p-3 border-b"><span className="bg-amber-100 text-amber-700 px-2 py-1 rounded text-xs font-black">시안 대기</span></td>
+                      </tr>
+                   </tbody>
+                </table>
+             </div>
+          </div>
+       )
+    }
+
+    function ContactsWorkspace() {
+       return (
+          <div className="bg-white p-8 rounded-2xl shadow border border-slate-200 text-center min-h-[50vh] flex flex-col justify-center items-center mt-4">
+             <div className="text-4xl mb-4">📞</div>
+             <h2 className="text-2xl font-black text-slate-800 mb-2">통합 연락처 (주소록)</h2>
+             <p className="text-slate-500 font-bold">석재상, 조경업체 등 협력사 비상 연락망. (DB 테이블 설계 대기중)</p>
+          </div>
+       )
+    }
+
+    // ⚙️ Main Application Controller
     function App() {
       const [activeTab, setActiveTab] = useState('dash');
       const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 1024);
@@ -1050,7 +1157,7 @@
           
           <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 border-r border-slate-800 text-slate-300 transform transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:hidden'} flex flex-col shadow-2xl lg:shadow-none`}>
             <div className="p-6 border-b border-slate-800 flex justify-between items-center shrink-0">
-              <h1 className="text-xl font-black text-white tracking-tighter">JAKE WorkOS <span className="text-[10px] bg-emerald-500 px-1.5 py-0.5 rounded ml-1 text-slate-900">V31</span></h1>
+              <h1 className="text-xl font-black text-white tracking-tighter">JAKE WorkOS <span className="text-[10px] bg-emerald-500 px-1.5 py-0.5 rounded ml-1 text-slate-900">V32</span></h1>
               <button className="lg:hidden text-slate-400 hover:text-white transition font-bold" onClick={() => setIsSidebarOpen(false)}>✕</button>
             </div>
             <nav className="p-4 space-y-8 overflow-y-auto flex-1 no-scrollbar">
@@ -1063,7 +1170,6 @@
                 </div>
               </div>
               
-              {/* ✅ JAKE WORKSPACE 사이드바 링크 */}
               <div>
                 <p className="text-[10px] font-black text-indigo-400 mb-3 ml-2 uppercase tracking-widest">Jake Personal</p>
                 <div className="space-y-1">
@@ -1088,41 +1194,16 @@
               </div>
             </header>
             
-            {/* 렌더링 구역 */}
             <div className="w-full p-2 md:p-4 pb-20">
               {activeTab === 'dash' && <DashboardView layoutData={layoutData} />}
               {activeTab === 'field' && <FieldView layoutData={layoutData} />}
               {activeTab === 'hr' && <HrView />}
               
               {/* JAKE WORKSPACE (Personal Section) */}
-              {activeTab === 'projects' && (
-                  <div className="bg-white p-8 rounded-2xl shadow border border-slate-200 text-center min-h-[50vh] flex flex-col justify-center items-center mt-4">
-                     <div className="text-4xl mb-4">🚀</div>
-                     <h2 className="text-2xl font-black text-slate-800 mb-2">프로젝트 칸반 보드</h2>
-                     <p className="text-slate-500 font-bold">수목장 조성 및 핵심 업무 진척도 관리 (개발 대기중)</p>
-                  </div>
-              )}
-              {activeTab === 'minutes' && (
-                  <div className="bg-white p-8 rounded-2xl shadow border border-slate-200 text-center min-h-[50vh] flex flex-col justify-center items-center mt-4">
-                     <div className="text-4xl mb-4">📝</div>
-                     <h2 className="text-2xl font-black text-slate-800 mb-2">회의록 관리소</h2>
-                     <p className="text-slate-500 font-bold">경영진 및 현장 회의 요약 기록 (개발 대기중)</p>
-                  </div>
-              )}
-              {activeTab === 'engraving' && (
-                  <div className="bg-white p-8 rounded-2xl shadow border border-slate-200 text-center min-h-[50vh] flex flex-col justify-center items-center mt-4">
-                     <div className="text-4xl mb-4">⚰️</div>
-                     <h2 className="text-2xl font-black text-slate-800 mb-2">각인 / 발주 자동화 시스템</h2>
-                     <p className="text-slate-500 font-bold">포토샵 배치 스크립트와 연동될 발주 데이터 관제소 (개발 대기중)</p>
-                  </div>
-              )}
-              {activeTab === 'contacts' && (
-                  <div className="bg-white p-8 rounded-2xl shadow border border-slate-200 text-center min-h-[50vh] flex flex-col justify-center items-center mt-4">
-                     <div className="text-4xl mb-4">📞</div>
-                     <h2 className="text-2xl font-black text-slate-800 mb-2">통합 연락처 / 주소록</h2>
-                     <p className="text-slate-500 font-bold">협력사 및 주요 고객 비상 연락망 (개발 대기중)</p>
-                  </div>
-              )}
+              {activeTab === 'projects' && <ProjectsWorkspace />}
+              {activeTab === 'minutes' && <MinutesWorkspace />}
+              {activeTab === 'engraving' && <EngravingWorkspace />}
+              {activeTab === 'contacts' && <ContactsWorkspace />}
             </div>
           </main>
         </div>
