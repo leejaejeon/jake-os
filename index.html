@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Jake WorkOS V29 - Smart Capacity & Workspace</title>
+  <title>Jake WorkOS V30 - Master Workspace</title>
   
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -15,6 +15,8 @@
 
   <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
+    
+    /* 전체 화면 스크롤 허용 */
     body { font-family: 'Pretendard', sans-serif; background-color: #f1f5f9; color: #1e293b; -webkit-font-smoothing: antialiased; }
     
     ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -25,7 +27,7 @@
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     
     .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background-color: #e2e8f0; border: 1px solid #e2e8f0; }
-    .calendar-cell { min-height: 120px; background-color: #fff; padding: 4px; cursor: pointer; transition: background-color 0.2s; position: relative; z-index: 10; }
+    .calendar-cell { min-height: 120px; background-color: #fff; padding: 4px; cursor: pointer; transition: background-color 0.2s; position: relative; }
     .calendar-cell:hover { background-color: #f8fafc; }
     .calendar-cell:active { background-color: #f1f5f9; }
     
@@ -100,7 +102,7 @@
         if (this.state.hasError) {
           return (
             <div className="p-8 m-4 bg-rose-50 border-2 border-rose-500 rounded-xl shadow-lg">
-              <h1 className="text-xl font-black text-rose-700 mb-2">🚨 V29 렌더링 에러</h1>
+              <h1 className="text-xl font-black text-rose-700 mb-2">🚨 V30 렌더링 에러</h1>
               <pre className="text-xs bg-white p-4 rounded border border-rose-200 overflow-auto">{this.state.error?.toString()}</pre>
             </div>
           );
@@ -188,6 +190,7 @@
               <h3 className="text-lg font-black text-white tracking-tight">📍 지도에서 위치 선택</h3>
               <button onClick={onClose} className="p-1 bg-slate-700 hover:bg-slate-600 rounded-lg text-white font-bold transition">닫기</button>
             </div>
+            
             <div className="flex gap-2 overflow-x-auto p-3 border-b border-slate-200 bg-slate-100 no-scrollbar shrink-0" style={{ WebkitOverflowScrolling: 'touch' }}>
               {SECTION_LIST.map(s => (
                 <button key={s} onClick={() => setArea(s)} className={`flex-none px-4 py-2 rounded-lg font-bold text-[13px] whitespace-nowrap transition-all border border-slate-300 ${area === s ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
@@ -195,6 +198,7 @@
                 </button>
               ))}
             </div>
+
             <div className="flex-1 overflow-auto bg-[#F8FAFC] p-4 relative">
               {loading ? (
                 <div className="flex h-full items-center justify-center font-black text-slate-400">데이터를 불러오는 중...</div>
@@ -223,11 +227,11 @@
       );
     }
 
-    // 📊 Dashboard & Jake Workspace View
+    // 📊 Dashboard View
     function DashboardView({ layoutData }) {
       const [loading, setLoading] = useState(true);
       const [events, setEvents] = useState([]);
-      const [hrData, setHrData] = useState([]); 
+      const [hrData, setHrData] = useState([]);
       const [currentDate, setCurrentDate] = useState(new Date());
       const chartRef = useRef(null);
       const chartInstance = useRef(null);
@@ -334,6 +338,10 @@
         return list.sort((a, b) => b.regDate - a.regDate);
       }, [events]);
 
+      const handleCellClick = (dateStr, dayEvents) => {
+        setDailyModal({ isOpen: true, dateStr, events: dayEvents });
+      };
+
       const saveSchedule = async (e) => {
           e.preventDefault();
           const targetLoc = gwangjung ? `${selectedLocBase}[${gwangjung}]` : selectedLocBase;
@@ -374,7 +382,6 @@
       return (
         <div className="space-y-6 max-w-7xl mx-auto flex flex-col relative w-full">
           
-          {/* TEAM WORKSPACE */}
           <div className="bg-slate-800 rounded-2xl p-4 shadow-lg text-white flex justify-between items-center">
             <div>
               <p className="text-xs font-bold text-slate-400 mb-1">
@@ -385,6 +392,10 @@
                 <div className="flex items-end gap-1"><span className="text-2xl font-black text-amber-400">{headlineStats.sales}</span><span className="text-sm font-bold text-slate-300 pb-1">답사</span></div>
                 <div className="flex items-end gap-1"><span className="text-2xl font-black text-blue-400">{headlineStats.hr}</span><span className="text-sm font-bold text-slate-300 pb-1">휴무</span></div>
               </div>
+            </div>
+            <div className="hidden sm:block text-right">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Jake WorkOS</p>
+              <p className="text-sm font-black text-emerald-400">DATABASE ACTIVE</p>
             </div>
           </div>
 
@@ -409,15 +420,14 @@
                 <div className="grid grid-cols-7 gap-px">
                   {['월','화','수','목','금','토','일'].map((d,i)=>(<div key={d} className={`py-2 text-center text-sm font-black bg-white ${i===6?'text-red-500':i===5?'text-blue-500':'text-slate-700'}`}>{d}</div>))}
                 </div>
-                <div className="grid grid-cols-7 gap-px flex-1">
+                {/* ✅ 수정됨: 달력 클릭 방해 요소에 pointer-events-none 적용 */}
+                <div className="grid grid-cols-7 gap-px">
                   {calendarDays.map((d,i)=>(
                     <div key={i} onClick={()=>d && handleCellClick(d.dateStr, d.dayEvents)} className={`calendar-cell flex flex-col ${!d?'bg-slate-50 cursor-default':'cursor-pointer'}`}>
                       {d && (
                         <>
-                          {/* ✅ 날짜 숫자: 포인터 이벤트 무시 */}
                           <div className={`pointer-events-none text-right text-xs font-bold p-1 ${getTodayStr() === d.dateStr ? 'text-white bg-blue-600 inline-block self-end rounded-md px-2' : 'text-slate-500'}`}>{d.day}</div>
-                          {/* ✅ 이벤트 리스트 영역: 포인터 이벤트 무시 */}
-                          <div className="pointer-events-none space-y-1 overflow-y-hidden pb-1">
+                          <div className="pointer-events-none space-y-1 pb-1">
                             {d.dayEvents.map((ev,idx)=>{
                               const isCancel = ev.status === '취소';
                               const isDone = ev.status === '답사완료' || ev.status === '안치확정';
@@ -430,6 +440,9 @@
                     </div>
                   ))}
                 </div>
+              </div>
+            </div>
+          </div>
           
           <div className="bg-white rounded-2xl shadow border border-slate-200 p-4">
               <h3 className="text-center font-black text-slate-800 text-sm mb-2">📈 월별 안치 현황 (최근 16개월)</h3>
@@ -438,37 +451,6 @@
               </div>
           </div>
 
-          {/* ========================================================= */}
-          {/* 🌟 JAKE WORKSPACE (Personal Section) */}
-          {/* ========================================================= */}
-          <div className="mt-8 pt-6 border-t-[3px] border-dashed border-slate-300 relative">
-             <div className="absolute top-[-14px] left-1/2 -translate-x-1/2 bg-[#F8FAFC] px-4 font-black text-slate-400 tracking-widest uppercase text-sm">
-                JAKE WORKSPACE
-             </div>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                
-                {/* 회의록 카드 */}
-                <div className="bg-gradient-to-br from-indigo-50 to-white border border-indigo-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition cursor-pointer">
-                    <div className="flex justify-between items-center mb-3">
-                        <h3 className="font-black text-indigo-900 text-lg">📝 회의록 관리</h3>
-                        <span className="bg-indigo-600 text-white text-[10px] px-2 py-1 rounded-full font-bold">준비중</span>
-                    </div>
-                    <p className="text-sm text-indigo-600/70 font-bold">경영진 및 현장 회의 요약 기록소</p>
-                </div>
-
-                {/* 각인 발주 관리 카드 */}
-                <div className="bg-gradient-to-br from-stone-50 to-white border border-stone-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition cursor-pointer">
-                    <div className="flex justify-between items-center mb-3">
-                        <h3 className="font-black text-stone-800 text-lg">⚰️ 각인/발주 관리</h3>
-                        <span className="bg-stone-800 text-white text-[10px] px-2 py-1 rounded-full font-bold">준비중</span>
-                    </div>
-                    <p className="text-sm text-stone-500 font-bold">비석 각인 시안 및 외주 발주 모니터링</p>
-                </div>
-
-             </div>
-          </div>
-
-          {/* 달력 모달들 */}
           <Modal isOpen={dailyModal.isOpen} onClose={()=>setDailyModal({...dailyModal, isOpen:false})} title={`📅 ${dailyModal.dateStr} 일정`}>
             {dailyModal.events.length === 0 ? <div className="text-center p-8 text-slate-400 font-bold">등록된 일정이 없습니다.</div> : (
               <div className="space-y-2">
@@ -608,11 +590,11 @@
       );
     }
 
-    // 🏖️ HR View (스마트 경고 시스템 적용)
+    // 🏖️ HR View (스마트 경고 시스템 4건 이상 패치 적용)
     function HrView() {
       const [loading, setLoading] = useState(true);
       const [hrData, setHrData] = useState([]);
-      const [events, setEvents] = useState([]); // 스마트 경고용
+      const [events, setEvents] = useState([]); 
       const [currentDate, setCurrentDate] = useState(new Date());
       const chartRef = useRef(null);
       const chartInstance = useRef(null);
@@ -716,7 +698,6 @@
              }
           });
 
-          // 스마트 경고 판단
           const dayEvents = events.filter(e => e.date === ds);
           const burialCount = dayEvents.filter(e => e.type === 'burial').length;
           const salesCount = dayEvents.filter(e => e.type === 'sales' && (e.status === '답사대기' || e.status === '답사완료')).length;
@@ -724,7 +705,7 @@
           let warnings = [];
           if (cap.contract <= 1) warnings.push('계약');
           if (salesCount > 0 && cap.guide <= 2) warnings.push('안내');
-          // ✅ 수정됨: 안치 일정이 4건 이상일 때만 경고
+          // ✅ 수정됨: 안치 4건 이상일 때
           if (burialCount >= 4 && cap.burial <= 2) warnings.push('안치');
 
           days.push({ day: i, dateStr: ds, cap, warnings });
@@ -774,11 +755,11 @@
                 </div>
                 <div className="grid grid-cols-7 gap-px">
                   {calendarDays.map((d,i)=>(
-                    <div key={i} onClick={()=>d && handleCellClick(d.dateStr)} className={`calendar-cell flex flex-col ${!d?'bg-slate-50 cursor-default':''}`}>
+                    <div key={i} onClick={()=>d && handleCellClick(d.dateStr)} className={`calendar-cell flex flex-col ${!d?'bg-slate-50 cursor-default':'cursor-pointer'}`}>
                       {d && (
                         <>
-                          <div className={`text-right text-xs font-bold p-1 ${getTodayStr() === d.dateStr ? 'text-white bg-blue-600 inline-block self-end rounded-md px-2' : 'text-slate-500'}`}>{d.day}</div>
-                          <div className="space-y-1 pb-1 flex-1">
+                          <div className={`pointer-events-none text-right text-xs font-bold p-1 ${getTodayStr() === d.dateStr ? 'text-white bg-blue-600 inline-block self-end rounded-md px-2' : 'text-slate-500'}`}>{d.day}</div>
+                          <div className="pointer-events-none space-y-1 pb-1 flex-1">
                             {EMPLOYEES.map((emp, idx) => {
                                const st = dayModal.data[emp] || getCleanedHR()[`${d.dateStr}_${emp}`];
                                if(st && st !== '출근') {
@@ -788,11 +769,9 @@
                                return null;
                             })}
                           </div>
-                          
-                          {/* 🚨 지능형 스마트 경고 배지 */}
                           {d.warnings.length > 0 && (
-                            <div className="mt-auto bg-red-100 border border-red-300 text-red-700 text-[10px] font-black rounded p-1 leading-tight tracking-tighter text-center">
-                              🚨 {d.warnings.join(', ')} 인원부족
+                            <div className="pointer-events-none mt-auto bg-red-100 border border-red-300 text-red-700 text-[10px] font-black rounded p-1 leading-tight tracking-tighter text-center">
+                              🚨 {d.warnings.join(', ')} 부족
                             </div>
                           )}
                         </>
@@ -1037,7 +1016,7 @@
           
           <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 border-r border-slate-800 text-slate-300 transform transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:hidden'} flex flex-col shadow-2xl lg:shadow-none`}>
             <div className="p-6 border-b border-slate-800 flex justify-between items-center shrink-0">
-              <h1 className="text-xl font-black text-white tracking-tighter">JAKE WorkOS <span className="text-[10px] bg-emerald-500 px-1.5 py-0.5 rounded ml-1 text-slate-900">V29</span></h1>
+              <h1 className="text-xl font-black text-white tracking-tighter">JAKE WorkOS <span className="text-[10px] bg-emerald-500 px-1.5 py-0.5 rounded ml-1 text-slate-900">V30</span></h1>
               <button className="lg:hidden text-slate-400 hover:text-white transition font-bold" onClick={() => setIsSidebarOpen(false)}>✕</button>
             </div>
             <nav className="p-4 space-y-8 overflow-y-auto flex-1 no-scrollbar">
@@ -1050,7 +1029,7 @@
                 </div>
               </div>
               
-              {/* JAKE WORKSPACE 사이드바 링크 */}
+              {/* ✅ JAKE WORKSPACE 사이드바 링크 */}
               <div>
                 <p className="text-[10px] font-black text-indigo-400 mb-3 ml-2 uppercase tracking-widest">Jake Personal</p>
                 <div className="space-y-1">
@@ -1058,6 +1037,8 @@
                   <button onClick={() => {setActiveTab('engraving'); if(window.innerWidth<1024)setIsSidebarOpen(false);}} className={`w-full flex items-center px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'engraving' ? 'bg-stone-600 text-white shadow-lg' : 'hover:bg-slate-800'}`}>⚰️ 각인/발주 현황</button>
                 </div>
               </div>
+            </nav>
+          </aside>
 
           {/* 메인 뷰 스크롤 해방 */}
           <main className="flex-1 flex flex-col h-screen overflow-y-auto overflow-x-hidden bg-[#F8FAFC]">
@@ -1066,24 +1047,27 @@
                 <button className="p-2 text-slate-500 hover:bg-slate-100 transition rounded-lg mr-3" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
                 </button>
-                <h2 className="font-black text-lg text-slate-800 tracking-tight">{activeTab === 'dash' ? 'Integrated Dashboard' : activeTab === 'field' ? 'Field Control Map' : 'HR Management'}</h2>
+                <h2 className="font-black text-lg text-slate-800 tracking-tight">
+                  {activeTab === 'dash' ? 'Integrated Dashboard' : activeTab === 'field' ? 'Field Control Map' : activeTab === 'hr' ? 'HR Management' : activeTab === 'minutes' ? 'Meeting Minutes' : 'Engraving Ops'}
+                </h2>
               </div>
             </header>
+            
+            {/* ✅ 렌더링 구역 스위칭 */}
             <div className="w-full p-2 md:p-4 pb-20">
               {activeTab === 'dash' && <DashboardView layoutData={layoutData} />}
               {activeTab === 'field' && <FieldView layoutData={layoutData} />}
               {activeTab === 'hr' && <HrView />}
               
-              {/* ✅ Jake Personal Workspace 렌더링 구역 */}
               {activeTab === 'minutes' && (
-                  <div className="bg-white p-8 rounded-2xl shadow border border-slate-200 text-center min-h-[50vh] flex flex-col justify-center items-center">
+                  <div className="bg-white p-8 rounded-2xl shadow border border-slate-200 text-center min-h-[50vh] flex flex-col justify-center items-center mt-10">
                      <div className="text-4xl mb-4">📝</div>
                      <h2 className="text-2xl font-black text-slate-800 mb-2">회의록 관리소</h2>
                      <p className="text-slate-500 font-bold">경영진 및 현장 회의 요약 기록. (현재 DB 설계 중입니다)</p>
                   </div>
               )}
               {activeTab === 'engraving' && (
-                  <div className="bg-white p-8 rounded-2xl shadow border border-slate-200 text-center min-h-[50vh] flex flex-col justify-center items-center">
+                  <div className="bg-white p-8 rounded-2xl shadow border border-slate-200 text-center min-h-[50vh] flex flex-col justify-center items-center mt-10">
                      <div className="text-4xl mb-4">⚰️</div>
                      <h2 className="text-2xl font-black text-slate-800 mb-2">각인 / 발주 자동화 시스템</h2>
                      <p className="text-slate-500 font-bold">포토샵 배치 스크립트와 연동될 발주 데이터 관제소. (현재 DB 설계 중입니다)</p>
